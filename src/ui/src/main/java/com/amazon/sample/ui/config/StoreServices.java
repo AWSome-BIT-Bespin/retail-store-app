@@ -21,6 +21,7 @@ package com.amazon.sample.ui.config;
 import com.amazon.sample.ui.client.cart.CartClient;
 import com.amazon.sample.ui.client.catalog.CatalogClient;
 import com.amazon.sample.ui.client.checkout.CheckoutClient;
+import com.amazon.sample.ui.client.orders.OrdersClient;
 import com.amazon.sample.ui.client.recommendations.RecommendationsClient;
 import com.amazon.sample.ui.services.carts.CartsService;
 import com.amazon.sample.ui.services.carts.KiotaCartsService;
@@ -33,6 +34,7 @@ import com.amazon.sample.ui.services.checkout.CheckoutService;
 import com.amazon.sample.ui.services.checkout.KiotaCheckoutService;
 import com.amazon.sample.ui.services.checkout.MockCheckoutService;
 import com.amazon.sample.ui.services.checkout.model.CheckoutMapper;
+import com.amazon.sample.ui.services.orders.OrdersService;
 import com.amazon.sample.ui.services.recommendations.KiotaRecommendationsService;
 import com.amazon.sample.ui.services.recommendations.MockRecommendationsService;
 import com.amazon.sample.ui.services.recommendations.RecommendationsService;
@@ -126,6 +128,17 @@ public class StoreServices {
     }
 
     return new MockCheckoutService(mapper, cartsService);
+  }
+
+  @Bean
+  public OrdersService ordersService(Call.Factory factory) {
+    if (StringUtils.hasText(this.endpoints.getOrders())) {
+      return new OrdersService(
+        new OrdersClient(getRequestAdapter(this.endpoints.getOrders(), factory))
+      );
+    }
+
+    return new OrdersService(null);
   }
 
   @Bean

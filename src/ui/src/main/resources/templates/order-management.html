@@ -1,0 +1,153 @@
+<!doctype html>
+<html
+  xmlns:th="http://www.thymeleaf.org"
+  th:replace="~{fragments/layout :: layout (~{::body},'order-management')}"
+>
+  <body>
+    <section class="max-w-6xl mx-auto px-4 py-12">
+      <div class="flex items-center justify-between mb-8 border-b border-gray-200 pb-4">
+        <div>
+          <p class="text-sm text-primary-500 font-medium uppercase tracking-wide">
+            Demo view
+          </p>
+          <h1 class="text-3xl font-bold text-gray-800">Order Management</h1>
+          <p class="mt-2 text-sm text-gray-500">
+            All orders returned by the Orders service
+          </p>
+        </div>
+        <i class="fas fa-boxes-stacked text-3xl text-primary-500" aria-hidden="true"></i>
+      </div>
+
+      <div
+        th:if="${ordersError}"
+        class="bg-red-50 border-l-4 border-red-500 text-red-700 p-4 rounded mb-6"
+        role="alert"
+      >
+        <p class="font-bold">
+          <i class="fas fa-circle-exclamation mr-2"></i>Unable to load orders
+        </p>
+        <p class="mt-1">The Orders API request failed.</p>
+      </div>
+
+      <div
+        th:if="${!ordersError and #lists.isEmpty(orders)}"
+        class="bg-white border border-gray-200 rounded-lg p-12 text-center"
+      >
+        <i class="fas fa-inbox text-4xl text-gray-300 mb-4" aria-hidden="true"></i>
+        <h2 class="text-xl font-semibold text-gray-700">No orders found</h2>
+        <p class="mt-2 text-sm text-gray-500">
+          There are no orders available to display.
+        </p>
+      </div>
+
+      <div
+        th:if="${!ordersError and !#lists.isEmpty(orders)}"
+        class="overflow-x-auto bg-white border border-gray-200 rounded-lg"
+      >
+        <table class="min-w-full divide-y divide-gray-200">
+          <caption class="sr-only">Order Management</caption>
+          <thead class="bg-gray-50">
+            <tr>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Order ID
+              </th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Customer email
+              </th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Products
+              </th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Shipping address
+              </th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-200">
+            <tr th:each="order : ${orders}" class="align-top hover:bg-gray-50">
+              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-primary-500">
+                <span th:if="${!#strings.isEmpty(order.id)}" th:text="${order.id}">Order ID</span>
+                <span th:unless="${!#strings.isEmpty(order.id)}" class="text-gray-400">&mdash;</span>
+              </td>
+              <td class="px-6 py-4 text-sm text-gray-700">
+                <span
+                  th:if="${order.shippingAddress != null and !#strings.isEmpty(order.shippingAddress.email)}"
+                  th:text="${order.shippingAddress.email}"
+                >customer@example.com</span>
+                <span
+                  th:unless="${order.shippingAddress != null and !#strings.isEmpty(order.shippingAddress.email)}"
+                  class="text-gray-400"
+                  >&mdash;</span
+                >
+              </td>
+              <td class="px-6 py-4 text-sm text-gray-700">
+                <ul
+                  th:if="${order.items != null and !#lists.isEmpty(order.items)}"
+                  class="space-y-1"
+                >
+                  <li th:each="item : ${order.items}">
+                    <span th:if="${!#strings.isEmpty(item.productId)}" th:text="${item.productId}">Product ID</span>
+                    <span th:unless="${!#strings.isEmpty(item.productId)}" class="text-gray-400">&mdash;</span>
+                    <span th:if="${item.quantity != null}" class="text-gray-500">
+                      &times; <th:block th:text="${item.quantity}">1</th:block>
+                    </span>
+                  </li>
+                </ul>
+                <span
+                  th:if="${order.items == null or #lists.isEmpty(order.items)}"
+                  class="text-gray-400"
+                  >&mdash;</span
+                >
+              </td>
+              <td class="px-6 py-4 text-sm text-gray-700">
+                <div th:if="${order.shippingAddress != null}" class="space-y-1">
+                  <p
+                    th:if="${!#strings.isEmpty(order.shippingAddress.firstName) or !#strings.isEmpty(order.shippingAddress.lastName)}"
+                    class="font-medium"
+                  >
+                    <span
+                      th:if="${!#strings.isEmpty(order.shippingAddress.firstName)}"
+                      th:text="${order.shippingAddress.firstName}"
+                    >First name</span>
+                    <span
+                      th:if="${!#strings.isEmpty(order.shippingAddress.lastName)}"
+                      th:text="${' ' + order.shippingAddress.lastName}"
+                    > Last name</span>
+                  </p>
+                  <p
+                    th:if="${!#strings.isEmpty(order.shippingAddress.address1)}"
+                    th:text="${order.shippingAddress.address1}"
+                  >
+                    Address
+                  </p>
+                  <p
+                    th:if="${!#strings.isEmpty(order.shippingAddress.address2)}"
+                    th:text="${order.shippingAddress.address2}"
+                  >
+                    Address 2
+                  </p>
+                  <p
+                    th:if="${!#strings.isEmpty(order.shippingAddress.city) or !#strings.isEmpty(order.shippingAddress.state) or !#strings.isEmpty(order.shippingAddress.zipCode)}"
+                  >
+                    <span
+                      th:if="${!#strings.isEmpty(order.shippingAddress.city)}"
+                      th:text="${order.shippingAddress.city}"
+                    >City</span>
+                    <span
+                      th:if="${!#strings.isEmpty(order.shippingAddress.state)}"
+                      th:text="${', ' + order.shippingAddress.state}"
+                    >, State</span>
+                    <span
+                      th:if="${!#strings.isEmpty(order.shippingAddress.zipCode)}"
+                      th:text="${' ' + order.shippingAddress.zipCode}"
+                    > ZIP</span>
+                  </p>
+                </div>
+                <span th:if="${order.shippingAddress == null}" class="text-gray-400">&mdash;</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </body>
+</html>
