@@ -24,6 +24,9 @@ import com.amazon.sample.orders.entities.OrderEntity;
 import com.amazon.sample.orders.entities.OrderItemEntity;
 import com.amazon.sample.orders.entities.ShippingAddressEntity;
 import com.amazon.sample.orders.repositories.OrderRepository;
+import com.amazon.sample.orders.repositories.UserRepository;
+import com.amazon.sample.orders.services.OrderService;
+import com.amazon.sample.orders.services.UserService;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,6 +37,15 @@ class OrdersApplicationTests {
 
   @Autowired
   private OrderRepository orderRepository;
+
+  @Autowired
+  private UserRepository userRepository;
+
+  @Autowired
+  private UserService userService;
+
+  @Autowired
+  private OrderService orderService;
 
   @Test
   void contextLoads() {}
@@ -60,5 +72,33 @@ class OrdersApplicationTests {
     assertThat(orderRepository.findById(order.getId()).orElseThrow().getItems())
       .extracting(OrderItemEntity::getProductId)
       .containsExactly(productId);
+  }
+
+  @Test
+  void storesHashedCredentialsAndFindsOrdersByCustomerEmail() {
+    var user = userService.register("John@Example.com", "demo");
+    var order = orderRepository.save(
+      new OrderEntity(
+        Set.of(new OrderItemEntity("product-id", 1, 10, 10)),
+        new ShippingAddressEntity(
+          "John",
+          "Doe",
+          "john@example.com",
+          "100 Main Street",
+          "",
+          "Anytown",
+          "11111",
+          "CA"
+        )
+      )
+    );
+
+    assertThat(userRepository.findById(user.getId()).orElseThrow().getPasswordHash())
+      .isNotEqualTo("demo");
+    assertThat(userService.authenticate("JOHN@example.com", "demo").getEmail())
+      .isEqualTo("john@example.com");
+    assertThat(orderService.listByCustomerEmail("JOHN@example.com"))
+      .extracting(OrderEntity::getId)
+      .containsExactly(order.getId());
   }
 }

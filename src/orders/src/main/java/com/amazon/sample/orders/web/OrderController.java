@@ -32,6 +32,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -58,8 +59,14 @@ public class OrderController {
 
   @GetMapping(produces = { "application/json" })
   @Operation(summary = "List orders", operationId = "listOrders")
-  public List<ExistingOrder> order() {
-    return this.service.list()
+  public List<ExistingOrder> order(
+    @RequestParam(required = false) String customerEmail
+  ) {
+    var orders = customerEmail == null || customerEmail.isBlank()
+      ? this.service.list()
+      : this.service.listByCustomerEmail(customerEmail);
+
+    return orders
       .stream()
       .peek(o -> System.out.println("Order: " + o))
       .map(this.orderMapper::toExistingOrder)

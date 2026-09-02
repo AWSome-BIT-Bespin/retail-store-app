@@ -26,6 +26,7 @@ import com.amazon.sample.ui.client.orders.models.OrderItem;
 import com.amazon.sample.ui.services.catalog.CatalogService;
 import com.amazon.sample.ui.services.orders.OrdersService;
 import com.amazon.sample.ui.web.util.RequiresCommonAttributes;
+import java.security.Principal;
 import java.util.List;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
@@ -54,13 +55,13 @@ public class OrderManagementController {
   }
 
   @GetMapping
-  public Mono<String> orders(Model model) {
+  public Mono<String> orders(Model model, Principal principal) {
     model.addAttribute("orders", List.of());
     model.addAttribute("productNames", Map.of());
     model.addAttribute("ordersError", false);
 
     return ordersService
-      .list()
+      .list(principal.getName())
       .flatMap(orders -> {
         model.addAttribute("orders", orders);
         return Flux.fromIterable(orders)

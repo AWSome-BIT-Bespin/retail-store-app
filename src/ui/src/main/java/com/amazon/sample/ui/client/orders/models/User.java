@@ -4,47 +4,38 @@ import com.microsoft.kiota.serialization.AdditionalDataHolder;
 import com.microsoft.kiota.serialization.Parsable;
 import com.microsoft.kiota.serialization.ParseNode;
 import com.microsoft.kiota.serialization.SerializationWriter;
-import java.time.OffsetDateTime;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 @jakarta.annotation.Generated("com.microsoft.kiota")
-public class ExistingOrder implements AdditionalDataHolder, Parsable {
+public class User implements AdditionalDataHolder, Parsable {
     /**
      * Stores additional data not described in the OpenAPI description found when deserializing. Can be used for serialization as well.
      */
     private Map<String, Object> additionalData;
     /**
-     * The createdDate property
+     * The email property
      */
-    private OffsetDateTime createdDate;
+    private String email;
     /**
      * The id property
      */
     private String id;
     /**
-     * The items property
+     * Instantiates a new {@link User} and sets the default values.
      */
-    private java.util.List<OrderItem> items;
-    /**
-     * The shippingAddress property
-     */
-    private ShippingAddress shippingAddress;
-    /**
-     * Instantiates a new {@link ExistingOrder} and sets the default values.
-     */
-    public ExistingOrder() {
+    public User() {
         this.setAdditionalData(new HashMap<>());
     }
     /**
      * Creates a new instance of the appropriate class based on discriminator value
      * @param parseNode The parse node to use to read the discriminator value and create the object
-     * @return a {@link ExistingOrder}
+     * @return a {@link User}
      */
     @jakarta.annotation.Nonnull
-    public static ExistingOrder createFromDiscriminatorValue(@jakarta.annotation.Nonnull final ParseNode parseNode) {
+    public static User createFromDiscriminatorValue(@jakarta.annotation.Nonnull final ParseNode parseNode) {
         Objects.requireNonNull(parseNode);
-        return new ExistingOrder();
+        return new User();
     }
     /**
      * Gets the AdditionalData property value. Stores additional data not described in the OpenAPI description found when deserializing. Can be used for serialization as well.
@@ -55,12 +46,12 @@ public class ExistingOrder implements AdditionalDataHolder, Parsable {
         return this.additionalData;
     }
     /**
-     * Gets the createdDate property value. The createdDate property
-     * @return a {@link OffsetDateTime}
+     * Gets the email property value. The email property
+     * @return a {@link String}
      */
     @jakarta.annotation.Nullable
-    public OffsetDateTime getCreatedDate() {
-        return this.createdDate;
+    public String getEmail() {
+        return this.email;
     }
     /**
      * The deserialization information for the current model
@@ -68,11 +59,9 @@ public class ExistingOrder implements AdditionalDataHolder, Parsable {
      */
     @jakarta.annotation.Nonnull
     public Map<String, java.util.function.Consumer<ParseNode>> getFieldDeserializers() {
-        final HashMap<String, java.util.function.Consumer<ParseNode>> deserializerMap = new HashMap<String, java.util.function.Consumer<ParseNode>>(4);
-        deserializerMap.put("createdDate", (n) -> { this.setCreatedDate(n.getOffsetDateTimeValue()); });
+        final HashMap<String, java.util.function.Consumer<ParseNode>> deserializerMap = new HashMap<String, java.util.function.Consumer<ParseNode>>(2);
+        deserializerMap.put("email", (n) -> { this.setEmail(n.getStringValue()); });
         deserializerMap.put("id", (n) -> { this.setId(n.getStringValue()); });
-        deserializerMap.put("items", (n) -> { this.setItems(n.getCollectionOfObjectValues(OrderItem::createFromDiscriminatorValue)); });
-        deserializerMap.put("shippingAddress", (n) -> { this.setShippingAddress(n.getObjectValue(ShippingAddress::createFromDiscriminatorValue)); });
         return deserializerMap;
     }
     /**
@@ -84,31 +73,13 @@ public class ExistingOrder implements AdditionalDataHolder, Parsable {
         return this.id;
     }
     /**
-     * Gets the items property value. The items property
-     * @return a {@link java.util.List<OrderItem>}
-     */
-    @jakarta.annotation.Nullable
-    public java.util.List<OrderItem> getItems() {
-        return this.items;
-    }
-    /**
-     * Gets the shippingAddress property value. The shippingAddress property
-     * @return a {@link ShippingAddress}
-     */
-    @jakarta.annotation.Nullable
-    public ShippingAddress getShippingAddress() {
-        return this.shippingAddress;
-    }
-    /**
      * Serializes information the current object
      * @param writer Serialization writer to use to serialize this model
      */
     public void serialize(@jakarta.annotation.Nonnull final SerializationWriter writer) {
         Objects.requireNonNull(writer);
-        writer.writeOffsetDateTimeValue("createdDate", this.getCreatedDate());
+        writer.writeStringValue("email", this.getEmail());
         writer.writeStringValue("id", this.getId());
-        writer.writeCollectionOfObjectValues("items", this.getItems());
-        writer.writeObjectValue("shippingAddress", this.getShippingAddress());
         writer.writeAdditionalData(this.getAdditionalData());
     }
     /**
@@ -119,11 +90,11 @@ public class ExistingOrder implements AdditionalDataHolder, Parsable {
         this.additionalData = value;
     }
     /**
-     * Sets the createdDate property value. The createdDate property
-     * @param value Value to set for the createdDate property.
+     * Sets the email property value. The email property
+     * @param value Value to set for the email property.
      */
-    public void setCreatedDate(@jakarta.annotation.Nullable final OffsetDateTime value) {
-        this.createdDate = value;
+    public void setEmail(@jakarta.annotation.Nullable final String value) {
+        this.email = value;
     }
     /**
      * Sets the id property value. The id property
@@ -131,19 +102,5 @@ public class ExistingOrder implements AdditionalDataHolder, Parsable {
      */
     public void setId(@jakarta.annotation.Nullable final String value) {
         this.id = value;
-    }
-    /**
-     * Sets the items property value. The items property
-     * @param value Value to set for the items property.
-     */
-    public void setItems(@jakarta.annotation.Nullable final java.util.List<OrderItem> value) {
-        this.items = value;
-    }
-    /**
-     * Sets the shippingAddress property value. The shippingAddress property
-     * @param value Value to set for the shippingAddress property.
-     */
-    public void setShippingAddress(@jakarta.annotation.Nullable final ShippingAddress value) {
-        this.shippingAddress = value;
     }
 }

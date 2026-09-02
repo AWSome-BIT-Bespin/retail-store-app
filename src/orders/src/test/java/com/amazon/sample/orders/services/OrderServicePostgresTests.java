@@ -138,4 +138,47 @@ public class OrderServicePostgresTests {
       .body(".", hasSize(2))
       .body("[0].items[0].productId", equalTo("123"));
   }
+
+  @Test
+  void shouldGetOrdersForCustomerEmail() {
+    orderRepository.saveAll(
+      List.of(
+        new OrderEntity(
+          Set.of(new OrderItemEntity("123", 1, 10, 10)),
+          new ShippingAddressEntity(
+            "John",
+            "Doe",
+            "john@example.com",
+            "Some Address",
+            "",
+            "Some City",
+            "11111",
+            "CA"
+          )
+        ),
+        new OrderEntity(
+          Set.of(new OrderItemEntity("456", 1, 10, 10)),
+          new ShippingAddressEntity(
+            "Jane",
+            "Doe",
+            "jane@example.com",
+            "Some Address",
+            "",
+            "Some City",
+            "11111",
+            "CA"
+          )
+        )
+      )
+    );
+
+    given()
+      .queryParam("customerEmail", "JOHN@example.com")
+      .when()
+      .get("/orders")
+      .then()
+      .statusCode(200)
+      .body(".", hasSize(1))
+      .body("[0].shippingAddress.email", equalTo("john@example.com"));
+  }
 }

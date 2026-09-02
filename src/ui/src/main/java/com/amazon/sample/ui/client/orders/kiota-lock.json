@@ -1,5 +1,5 @@
 {
-  "descriptionHash": "103CBBED2EFA2E15385274B7049D7A4A85BF05796CEB9CB7707C88429D6AE79A73F3BC110A27953CA5C0837238857216DD369E36CA20D88C1035B3D8606B1911",
+  "descriptionHash": "74B92F9A0C4AF1A46BBC701396F9FFD5CF3C4FA008930E46211053170E258403F804B9F3989F6B0B505938877D06B4652CB40016AE3A882945A917CF05C3AFE3",
   "descriptionLocation": "../../../../../../../../../../orders/openapi.yml",
   "lockFileVersion": "1.0.0",
   "kiotaVersion": "1.21.0",
@@ -14,7 +14,9 @@
   "serializers": [
     "com.microsoft.kiota.serialization.JsonSerializationWriterFactory"
   ],
-  "deserializers": ["com.microsoft.kiota.serialization.JsonParseNodeFactory"],
+  "deserializers": [
+    "com.microsoft.kiota.serialization.JsonParseNodeFactory"
+  ],
   "structuredMimeTypes": [
     "application/json",
     "text/plain;q=0.9",

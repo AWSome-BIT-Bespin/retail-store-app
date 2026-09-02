@@ -19,6 +19,7 @@
 package com.amazon.sample.orders.config;
 
 import com.amazon.sample.orders.entities.OrderEntity;
+import com.amazon.sample.orders.entities.UserEntity;
 import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.UUID;
@@ -41,6 +42,16 @@ public class PersistenceConfig extends AbstractJdbcConfiguration {
         String id = UUID.randomUUID().toString();
         entity.setId(id);
         entity.setCreatedDate(LocalDateTime.now());
+      }
+      return entity;
+    };
+  }
+
+  @Bean
+  BeforeConvertCallback<UserEntity> beforeSaveCallbackUser() {
+    return entity -> {
+      if (entity.getId() == null) {
+        entity.setId(UUID.randomUUID().toString());
       }
       return entity;
     };

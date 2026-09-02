@@ -23,7 +23,10 @@
 package com.amazon.sample.ui.services.orders;
 
 import com.amazon.sample.ui.client.orders.OrdersClient;
+import com.amazon.sample.ui.client.orders.models.Credentials;
 import com.amazon.sample.ui.client.orders.models.ExistingOrder;
+import com.amazon.sample.ui.client.orders.models.User;
+import com.amazon.sample.ui.client.orders.models.UserRegistration;
 import java.util.List;
 import reactor.core.publisher.Mono;
 
@@ -37,11 +40,43 @@ public class OrdersService {
 
   public Mono<List<ExistingOrder>> list() {
     return Mono.fromCallable(() -> {
-      if (ordersClient == null) {
-        throw new IllegalStateException("Orders endpoint is not configured");
-      }
-
-      return ordersClient.orders().get();
+      return client().orders().get();
     });
+  }
+
+  public Mono<List<ExistingOrder>> list(String customerEmail) {
+    return Mono.fromCallable(() ->
+      client().orders().get(config ->
+          config.queryParameters.customerEmail = customerEmail
+        )
+    );
+  }
+
+  public Mono<User> register(String email, String password) {
+    return Mono.fromCallable(() -> {
+      var registration = new UserRegistration();
+      registration.setEmail(email);
+      registration.setPassword(password);
+
+      return client().users().post(registration);
+    });
+  }
+
+  public Mono<User> authenticate(String email, String password) {
+    return Mono.fromCallable(() -> {
+      var credentials = new Credentials();
+      credentials.setEmail(email);
+      credentials.setPassword(password);
+
+      return client().auth().login().post(credentials);
+    });
+  }
+
+  private OrdersClient client() {
+    if (ordersClient == null) {
+      throw new IllegalStateException("Orders endpoint is not configured");
+    }
+
+    return ordersClient;
   }
 }

@@ -22,6 +22,7 @@ import com.amazon.sample.orders.entities.OrderEntity;
 import com.amazon.sample.orders.messaging.OrdersEventHandler;
 import com.amazon.sample.orders.repositories.OrderRepository;
 import java.util.List;
+import java.util.Locale;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 import lombok.extern.slf4j.Slf4j;
@@ -55,6 +56,18 @@ public class OrderService extends AbstractRelationalEventListener<OrderEntity> {
       this.repository.findAll().spliterator(),
       false
     ).collect(Collectors.toList());
+  }
+
+  public List<OrderEntity> listByCustomerEmail(String customerEmail) {
+    String normalizedEmail = customerEmail.trim().toLowerCase(Locale.ROOT);
+
+    return list()
+      .stream()
+      .filter(order -> order.getShippingAddress() != null)
+      .filter(order -> normalizedEmail.equals(
+        order.getShippingAddress().getEmail().trim().toLowerCase(Locale.ROOT)
+      ))
+      .toList();
   }
 
   protected void onAfterSave(AfterSaveEvent<OrderEntity> orderCreated) {

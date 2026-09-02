@@ -37,6 +37,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
 @Controller
@@ -52,20 +53,23 @@ public class CheckoutController {
   }
 
   @GetMapping
-  public Mono<String> checkout(ServerHttpRequest request, Model model) {
-    return showShipping(new ShippingAddressRequest(), request, model);
+  public Mono<String> checkout(ServerWebExchange exchange, Model model) {
+    return showShipping(new ShippingAddressRequest(), exchange, model);
   }
 
   private Mono<String> showShipping(
     ShippingAddressRequest shippingAddressRequest,
-    ServerHttpRequest request,
+    ServerWebExchange exchange,
     Model model
   ) {
-    String sessionId = SessionIDUtil.getSessionId(request);
+    String sessionId = SessionIDUtil.getSessionId(exchange.getRequest());
 
     model.addAttribute("shippingAddressRequest", shippingAddressRequest);
 
-    return this.checkoutService.create(sessionId)
+    return exchange
+      .getPrincipal()
+      .doOnNext(principal -> shippingAddressRequest.setEmail(principal.getName()))
+      .then(this.checkoutService.create(sessionId))
       .doOnNext(o -> {
         model.addAttribute("checkout", o);
       })
@@ -78,11 +82,11 @@ public class CheckoutController {
       "shippingAddressRequest"
     ) ShippingAddressRequest shippingAddressRequest,
     BindingResult result,
-    ServerHttpRequest request,
+    ServerWebExchange exchange,
     Model model
   ) {
     if (result.hasErrors()) {
-      return showShipping(shippingAddressRequest, request, model);
+      return showShipping(shippingAddressRequest, exchange, model);
     }
 
     ShippingAddress address = new ShippingAddress();
@@ -93,22 +97,27 @@ public class CheckoutController {
     address.setCity(shippingAddressRequest.getCity());
     address.setState(shippingAddressRequest.getState());
     address.setZip(shippingAddressRequest.getZipCode());
-    address.setEmail(shippingAddressRequest.getEmail());
+    return exchange
+      .getPrincipal()
+      .map(principal -> principal.getName())
+      .defaultIfEmpty(shippingAddressRequest.getEmail())
+      .flatMap(email -> {
+        address.setEmail(email);
+        String sessionId = SessionIDUtil.getSessionId(exchange.getRequest());
 
-    String sessionId = SessionIDUtil.getSessionId(request);
+        return this.checkoutService.shipping(sessionId, address).map(c -> {
+            String defaultToken = null;
 
-    return this.checkoutService.shipping(sessionId, address).map(c -> {
-        String defaultToken = null;
-
-        if (c.getShippingOptions().size() > 0) {
-          defaultToken = c.getShippingOptions().get(0).getToken();
-        }
-        return this.showDelivery(
-            c,
-            new CheckoutDeliveryMethodRequest(defaultToken),
-            request,
-            model
-          );
+            if (c.getShippingOptions().size() > 0) {
+              defaultToken = c.getShippingOptions().get(0).getToken();
+            }
+            return this.showDelivery(
+                c,
+                new CheckoutDeliveryMethodRequest(defaultToken),
+                exchange.getRequest(),
+                model
+              );
+          });
       });
   }
 

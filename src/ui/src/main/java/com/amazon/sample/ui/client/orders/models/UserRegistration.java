@@ -8,34 +8,34 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 @jakarta.annotation.Generated("com.microsoft.kiota")
-public class Order implements AdditionalDataHolder, Parsable {
+public class UserRegistration implements AdditionalDataHolder, Parsable {
     /**
      * Stores additional data not described in the OpenAPI description found when deserializing. Can be used for serialization as well.
      */
     private Map<String, Object> additionalData;
     /**
-     * The items property
+     * The email property
      */
-    private java.util.List<OrderItem> items;
+    private String email;
     /**
-     * The shippingAddress property
+     * The password property
      */
-    private ShippingAddress shippingAddress;
+    private String password;
     /**
-     * Instantiates a new {@link Order} and sets the default values.
+     * Instantiates a new {@link UserRegistration} and sets the default values.
      */
-    public Order() {
+    public UserRegistration() {
         this.setAdditionalData(new HashMap<>());
     }
     /**
      * Creates a new instance of the appropriate class based on discriminator value
      * @param parseNode The parse node to use to read the discriminator value and create the object
-     * @return a {@link Order}
+     * @return a {@link UserRegistration}
      */
     @jakarta.annotation.Nonnull
-    public static Order createFromDiscriminatorValue(@jakarta.annotation.Nonnull final ParseNode parseNode) {
+    public static UserRegistration createFromDiscriminatorValue(@jakarta.annotation.Nonnull final ParseNode parseNode) {
         Objects.requireNonNull(parseNode);
-        return new Order();
+        return new UserRegistration();
     }
     /**
      * Gets the AdditionalData property value. Stores additional data not described in the OpenAPI description found when deserializing. Can be used for serialization as well.
@@ -46,31 +46,31 @@ public class Order implements AdditionalDataHolder, Parsable {
         return this.additionalData;
     }
     /**
+     * Gets the email property value. The email property
+     * @return a {@link String}
+     */
+    @jakarta.annotation.Nullable
+    public String getEmail() {
+        return this.email;
+    }
+    /**
      * The deserialization information for the current model
      * @return a {@link Map<String, java.util.function.Consumer<ParseNode>>}
      */
     @jakarta.annotation.Nonnull
     public Map<String, java.util.function.Consumer<ParseNode>> getFieldDeserializers() {
         final HashMap<String, java.util.function.Consumer<ParseNode>> deserializerMap = new HashMap<String, java.util.function.Consumer<ParseNode>>(2);
-        deserializerMap.put("items", (n) -> { this.setItems(n.getCollectionOfObjectValues(OrderItem::createFromDiscriminatorValue)); });
-        deserializerMap.put("shippingAddress", (n) -> { this.setShippingAddress(n.getObjectValue(ShippingAddress::createFromDiscriminatorValue)); });
+        deserializerMap.put("email", (n) -> { this.setEmail(n.getStringValue()); });
+        deserializerMap.put("password", (n) -> { this.setPassword(n.getStringValue()); });
         return deserializerMap;
     }
     /**
-     * Gets the items property value. The items property
-     * @return a {@link java.util.List<OrderItem>}
+     * Gets the password property value. The password property
+     * @return a {@link String}
      */
     @jakarta.annotation.Nullable
-    public java.util.List<OrderItem> getItems() {
-        return this.items;
-    }
-    /**
-     * Gets the shippingAddress property value. The shippingAddress property
-     * @return a {@link ShippingAddress}
-     */
-    @jakarta.annotation.Nullable
-    public ShippingAddress getShippingAddress() {
-        return this.shippingAddress;
+    public String getPassword() {
+        return this.password;
     }
     /**
      * Serializes information the current object
@@ -78,8 +78,8 @@ public class Order implements AdditionalDataHolder, Parsable {
      */
     public void serialize(@jakarta.annotation.Nonnull final SerializationWriter writer) {
         Objects.requireNonNull(writer);
-        writer.writeCollectionOfObjectValues("items", this.getItems());
-        writer.writeObjectValue("shippingAddress", this.getShippingAddress());
+        writer.writeStringValue("email", this.getEmail());
+        writer.writeStringValue("password", this.getPassword());
         writer.writeAdditionalData(this.getAdditionalData());
     }
     /**
@@ -90,17 +90,17 @@ public class Order implements AdditionalDataHolder, Parsable {
         this.additionalData = value;
     }
     /**
-     * Sets the items property value. The items property
-     * @param value Value to set for the items property.
+     * Sets the email property value. The email property
+     * @param value Value to set for the email property.
      */
-    public void setItems(@jakarta.annotation.Nullable final java.util.List<OrderItem> value) {
-        this.items = value;
+    public void setEmail(@jakarta.annotation.Nullable final String value) {
+        this.email = value;
     }
     /**
-     * Sets the shippingAddress property value. The shippingAddress property
-     * @param value Value to set for the shippingAddress property.
+     * Sets the password property value. The password property
+     * @param value Value to set for the password property.
      */
-    public void setShippingAddress(@jakarta.annotation.Nullable final ShippingAddress value) {
-        this.shippingAddress = value;
+    public void setPassword(@jakarta.annotation.Nullable final String value) {
+        this.password = value;
     }
 }

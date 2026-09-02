@@ -15,6 +15,7 @@ import com.amazon.sample.ui.client.orders.models.OrderItem;
 import com.amazon.sample.ui.services.catalog.CatalogService;
 import com.amazon.sample.ui.services.catalog.model.Product;
 import com.amazon.sample.ui.services.orders.OrdersService;
+import java.security.Principal;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -33,7 +34,8 @@ class OrderManagementControllerTest {
     unavailableProduct.setProductId("2");
     var order = new ExistingOrder();
     order.setItems(List.of(product, unavailableProduct));
-    when(ordersService.list()).thenReturn(Mono.just(List.of(order)));
+    Principal principal = () -> "john@example.com";
+    when(ordersService.list(principal.getName())).thenReturn(Mono.just(List.of(order)));
     when(catalogService.getProduct("1"))
       .thenReturn(Mono.just(new Product("1", "Coffee", "", 0, List.of())));
     when(catalogService.getProduct("2"))
@@ -41,7 +43,7 @@ class OrderManagementControllerTest {
     var model = new ConcurrentModel();
 
     var view = new OrderManagementController(ordersService, catalogService)
-      .orders(model)
+      .orders(model, principal)
       .block();
 
     assertThat(view).isEqualTo("order-management");
