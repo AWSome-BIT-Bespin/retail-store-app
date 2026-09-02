@@ -22,14 +22,18 @@
 
 package com.amazon.sample.ui.web;
 
+import com.amazon.sample.ui.client.orders.models.OrderItem;
+import com.amazon.sample.ui.services.catalog.CatalogService;
 import com.amazon.sample.ui.services.orders.OrdersService;
 import com.amazon.sample.ui.web.util.RequiresCommonAttributes;
 import java.util.List;
+import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 @Controller
@@ -39,19 +43,43 @@ import reactor.core.publisher.Mono;
 public class OrderManagementController {
 
   private final OrdersService ordersService;
+  private final CatalogService catalogService;
 
-  public OrderManagementController(OrdersService ordersService) {
+  public OrderManagementController(
+    OrdersService ordersService,
+    CatalogService catalogService
+  ) {
     this.ordersService = ordersService;
+    this.catalogService = catalogService;
   }
 
   @GetMapping
   public Mono<String> orders(Model model) {
     model.addAttribute("orders", List.of());
+    model.addAttribute("productNames", Map.of());
     model.addAttribute("ordersError", false);
 
     return ordersService
       .list()
-      .doOnNext(orders -> model.addAttribute("orders", orders))
+      .flatMap(orders -> {
+        model.addAttribute("orders", orders);
+        return Flux.fromIterable(orders)
+          .flatMapIterable(order ->
+            order.getItems() == null ? List.<OrderItem>of() : order.getItems()
+          )
+          .map(OrderItem::getProductId)
+          .filter(productId -> productId != null && !productId.isBlank())
+          .distinct()
+          .flatMap(productId ->
+            catalogService
+              .getProduct(productId)
+              .filter(product -> product.getName() != null && !product.getName().isBlank())
+              .map(product -> Map.entry(productId, product.getName()))
+              .onErrorResume(error -> Mono.empty())
+          )
+          .collectMap(Map.Entry::getKey, Map.Entry::getValue);
+      })
+      .doOnNext(productNames -> model.addAttribute("productNames", productNames))
       .onErrorResume(error -> {
         log.warn("Unable to load orders for order management page", error);
         model.addAttribute("ordersError", true);

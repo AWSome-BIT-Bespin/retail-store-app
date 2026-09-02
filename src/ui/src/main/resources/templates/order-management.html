@@ -85,8 +85,13 @@
                   class="space-y-1"
                 >
                   <li th:each="item : ${order.items}">
-                    <span th:if="${!#strings.isEmpty(item.productId)}" th:text="${item.productId}">Product ID</span>
-                    <span th:unless="${!#strings.isEmpty(item.productId)}" class="text-gray-400">&mdash;</span>
+                    <th:block th:if="${productNames.containsKey(item.productId)}">
+                      <span th:text="${productNames.get(item.productId)}">Product name</span>
+                    </th:block>
+                    <th:block th:unless="${productNames.containsKey(item.productId)}">
+                      <span th:if="${!#strings.isEmpty(item.productId)}" th:text="${item.productId}">Product ID</span>
+                      <span th:unless="${!#strings.isEmpty(item.productId)}" class="text-gray-400">&mdash;</span>
+                    </th:block>
                     <span th:if="${item.quantity != null}" class="text-gray-500">
                       &times; <th:block th:text="${item.quantity}">1</th:block>
                     </span>
