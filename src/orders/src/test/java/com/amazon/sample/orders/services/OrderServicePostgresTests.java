@@ -19,6 +19,7 @@
 package com.amazon.sample.orders.services;
 
 import static io.restassured.RestAssured.given;
+import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.hasSize;
 
 import com.amazon.sample.orders.entities.OrderEntity;
@@ -28,6 +29,7 @@ import com.amazon.sample.orders.repositories.OrderRepository;
 import io.restassured.RestAssured;
 import io.restassured.http.ContentType;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -95,7 +97,7 @@ public class OrderServicePostgresTests {
 
   @Test
   void shouldGetAllOrders() {
-    var items = List.of(new OrderItemEntity("123", 1, 10, 10));
+    var items = Set.of(new OrderItemEntity("123", 1, 10, 10));
 
     List<OrderEntity> orders = List.of(
       new OrderEntity(
@@ -133,6 +135,7 @@ public class OrderServicePostgresTests {
       .get("/orders")
       .then()
       .statusCode(200)
-      .body(".", hasSize(2));
+      .body(".", hasSize(2))
+      .body("[0].items[0].productId", equalTo("123"));
   }
 }
