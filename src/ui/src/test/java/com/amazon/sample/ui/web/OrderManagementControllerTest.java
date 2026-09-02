@@ -24,16 +24,20 @@ import reactor.core.publisher.Mono;
 class OrderManagementControllerTest {
 
   @Test
-  void addsCatalogNamesForOrderProducts() {
+  void addsCatalogNamesWithoutFailingWhenAProductLookupIsUnavailable() {
     var ordersService = mock(OrdersService.class);
     var catalogService = mock(CatalogService.class);
     var product = new OrderItem();
     product.setProductId("1");
+    var unavailableProduct = new OrderItem();
+    unavailableProduct.setProductId("2");
     var order = new ExistingOrder();
-    order.setItems(List.of(product));
+    order.setItems(List.of(product, unavailableProduct));
     when(ordersService.list()).thenReturn(Mono.just(List.of(order)));
     when(catalogService.getProduct("1"))
       .thenReturn(Mono.just(new Product("1", "Coffee", "", 0, List.of())));
+    when(catalogService.getProduct("2"))
+      .thenThrow(new IllegalStateException("Catalog endpoint is not configured"));
     var model = new ConcurrentModel();
 
     var view = new OrderManagementController(ordersService, catalogService)
@@ -42,6 +46,8 @@ class OrderManagementControllerTest {
 
     assertThat(view).isEqualTo("order-management");
     assertThat(model.getAttribute("productNames")).isEqualTo(Map.of("1", "Coffee"));
+    assertThat(model.getAttribute("ordersError")).isEqualTo(false);
     verify(catalogService).getProduct("1");
+    verify(catalogService).getProduct("2");
   }
 }

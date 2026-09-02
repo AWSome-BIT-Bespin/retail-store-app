@@ -71,8 +71,7 @@ public class OrderManagementController {
           .filter(productId -> productId != null && !productId.isBlank())
           .distinct()
           .flatMap(productId ->
-            catalogService
-              .getProduct(productId)
+            Mono.defer(() -> catalogService.getProduct(productId))
               .filter(product -> product.getName() != null && !product.getName().isBlank())
               .map(product -> Map.entry(productId, product.getName()))
               .onErrorResume(error -> Mono.empty())
