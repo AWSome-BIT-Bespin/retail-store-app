@@ -69,6 +69,10 @@ public class CheckoutController {
     return exchange
       .getPrincipal()
       .doOnNext(principal -> shippingAddressRequest.setEmail(principal.getName()))
+      .hasElement()
+      .doOnNext(authenticated ->
+        model.addAttribute("isAuthenticated", authenticated)
+      )
       .then(this.checkoutService.create(sessionId))
       .doOnNext(o -> {
         model.addAttribute("checkout", o);
