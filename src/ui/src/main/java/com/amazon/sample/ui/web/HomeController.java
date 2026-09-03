@@ -20,6 +20,7 @@ package com.amazon.sample.ui.web;
 
 import com.amazon.sample.ui.services.catalog.CatalogService;
 import com.amazon.sample.ui.web.util.RequiresCommonAttributes;
+import java.security.Principal;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.stereotype.Controller;
@@ -40,16 +41,25 @@ public class HomeController {
   }
 
   @GetMapping("/")
-  public String index(final Model model, final ServerHttpRequest request) {
-    return home(model, request);
+  public String index(
+    final Model model,
+    final ServerHttpRequest request,
+    final Principal principal
+  ) {
+    return home(model, request, principal);
   }
 
   @GetMapping("/home")
-  public String home(final Model model, final ServerHttpRequest request) {
+  public String home(
+    final Model model,
+    final ServerHttpRequest request,
+    final Principal principal
+  ) {
     model.addAttribute(
       "catalog",
       this.catalogService.getProducts("", "", DEFAULT_PAGE, DEFAULT_SIZE)
     );
+    model.addAttribute("isAuthenticated", principal != null);
 
     return "home";
   }
