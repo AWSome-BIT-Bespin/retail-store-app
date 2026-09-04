@@ -1,0 +1,31 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "PublishAndVerifyRetailImages",
+      "Effect": "Allow",
+      "Action": [
+        "ecr:BatchCheckLayerAvailability",
+        "ecr:InitiateLayerUpload",
+        "ecr:UploadLayerPart",
+        "ecr:CompleteLayerUpload",
+        "ecr:PutImage",
+        "ecr:BatchGetImage",
+        "ecr:GetDownloadUrlForLayer"
+      ],
+      "Resource": [
+        "arn:aws:ecr:ap-northeast-2:350606136784:repository/retail-cart",
+        "arn:aws:ecr:ap-northeast-2:350606136784:repository/retail-catalog",
+        "arn:aws:ecr:ap-northeast-2:350606136784:repository/retail-checkout",
+        "arn:aws:ecr:ap-northeast-2:350606136784:repository/retail-orders",
+        "arn:aws:ecr:ap-northeast-2:350606136784:repository/retail-ui"
+      ]
+    },
+    {
+      "Sid": "AuthenticateDockerToEcr",
+      "Effect": "Allow",
+      "Action": "ecr:GetAuthorizationToken",
+      "Resource": "*"
+    }
+  ]
+}
