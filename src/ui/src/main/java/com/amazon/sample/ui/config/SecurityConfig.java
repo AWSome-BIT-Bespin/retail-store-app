@@ -1,6 +1,7 @@
 package com.amazon.sample.ui.config;
 
 import com.amazon.sample.ui.services.orders.OrdersService;
+import java.net.URI;
 import java.util.List;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -14,6 +15,7 @@ import org.springframework.security.web.server.SecurityWebFilterChain;
 import org.springframework.security.web.server.context.ServerSecurityContextRepository;
 import org.springframework.security.web.server.context.WebSessionServerSecurityContextRepository;
 import org.springframework.security.web.server.authentication.RedirectServerAuthenticationSuccessHandler;
+import org.springframework.security.web.server.authentication.logout.RedirectServerLogoutSuccessHandler;
 import org.springframework.security.web.server.savedrequest.ServerRequestCache;
 import org.springframework.security.web.server.savedrequest.WebSessionServerRequestCache;
 import org.springframework.security.web.server.util.matcher.ServerWebExchangeMatchers;
@@ -71,6 +73,8 @@ public class SecurityConfig {
     var authenticationSuccessHandler =
       new RedirectServerAuthenticationSuccessHandler("/demo/orders");
     authenticationSuccessHandler.setRequestCache(checkoutRequestCache);
+    var logoutSuccessHandler = new RedirectServerLogoutSuccessHandler();
+    logoutSuccessHandler.setLogoutSuccessUrl(URI.create("/"));
 
     return http
       .authenticationManager(authenticationManager)
@@ -106,6 +110,9 @@ public class SecurityConfig {
         form
           .loginPage("/login")
           .authenticationSuccessHandler(authenticationSuccessHandler)
+      )
+      .logout(logout ->
+        logout.logoutSuccessHandler(logoutSuccessHandler)
       )
       .build();
   }

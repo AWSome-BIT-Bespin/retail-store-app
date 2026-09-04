@@ -150,6 +150,22 @@ class CheckoutAuthenticationIntegrationTest {
     assertThat(address.getValue().getEmail()).isEqualTo(EMAIL);
   }
 
+  @Test
+  void logsOutWithCsrfTokenAndClearsCheckoutAccess() {
+    Browser browser = login(Browser.empty(), "/demo/orders");
+    EntityExchangeResult<String> homePage = get("/", browser)
+      .expectStatus().isOk()
+      .expectBody(String.class)
+      .returnResult();
+    browser = browserAfter(homePage, browser);
+    assertThat(homePage.getResponseBody()).contains("menu-logout");
+
+    post("/logout", browser, form("_csrf", csrf(homePage.getResponseBody())))
+      .expectStatus().is3xxRedirection()
+      .expectHeader().valueEquals(HttpHeaders.LOCATION, "/");
+    get("/checkout", browser).expectStatus().is3xxRedirection();
+  }
+
   private Browser addCartItem(Browser browser) {
     Browser catalog = browserAfter(get("/catalog", browser).expectStatus().isOk().expectBody(String.class).returnResult(), browser);
     return browserAfter(post("/cart", catalog, form("productId", PRODUCT_ID, "quantity", "1"))
@@ -181,7 +197,7 @@ class CheckoutAuthenticationIntegrationTest {
   }
 
   private WebTestClient.ResponseSpec get(String path, Browser browser) {
-    return cookies(webClient.get().uri(path), browser).exchange();
+    return cookies(webClient.get().uri(path).accept(MediaType.TEXT_HTML), browser).exchange();
   }
 
   private WebTestClient.ResponseSpec post(String path, Browser browser, MultiValueMap<String, String> form) {

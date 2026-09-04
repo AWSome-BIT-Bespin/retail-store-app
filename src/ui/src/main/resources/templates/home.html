@@ -52,6 +52,14 @@
                 class="text-white/90 hover:text-white transition duration-300 text-sm switch"
                 >Sign up</a
               >
+              <form th:if="${isAuthenticated}" th:action="@{/logout}" method="post">
+                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}" />
+                <button
+                  id="menu-logout"
+                  type="submit"
+                  class="text-white/90 hover:text-white transition duration-300 text-sm switch"
+                >Sign out</button>
+              </form>
             </div>
             <!-- Cart Button with Count -->
             <div class="flex items-center">
@@ -92,7 +100,7 @@
               );
             // Change text color on scroll
             navbar
-              .querySelectorAll("a.switch, span.switch, i.switch")
+              .querySelectorAll("a.switch, button.switch, span.switch, i.switch")
               .forEach((element) => {
                 element.classList.remove("text-white", "text-white/90");
                 element.classList.add("text-gray-700");
@@ -115,7 +123,7 @@
               );
             // Restore text color
             navbar
-              .querySelectorAll("a.switch, span.switch, i.switch")
+              .querySelectorAll("a.switch, button.switch, span.switch, i.switch")
               .forEach((element) => {
                 element.classList.add("text-white");
                 element.classList.remove("text-gray-700");

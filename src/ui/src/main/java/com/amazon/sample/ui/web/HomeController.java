@@ -22,10 +22,12 @@ import com.amazon.sample.ui.services.catalog.CatalogService;
 import com.amazon.sample.ui.web.util.RequiresCommonAttributes;
 import java.security.Principal;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.server.reactive.ServerHttpRequest;
+import org.springframework.security.web.server.csrf.CsrfToken;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.server.ServerWebExchange;
+import reactor.core.publisher.Mono;
 
 @Controller
 @RequiresCommonAttributes
@@ -41,18 +43,18 @@ public class HomeController {
   }
 
   @GetMapping("/")
-  public String index(
+  public Mono<String> index(
     final Model model,
-    final ServerHttpRequest request,
+    final ServerWebExchange exchange,
     final Principal principal
   ) {
-    return home(model, request, principal);
+    return home(model, exchange, principal);
   }
 
   @GetMapping("/home")
-  public String home(
+  public Mono<String> home(
     final Model model,
-    final ServerHttpRequest request,
+    final ServerWebExchange exchange,
     final Principal principal
   ) {
     model.addAttribute(
@@ -61,6 +63,16 @@ public class HomeController {
     );
     model.addAttribute("isAuthenticated", principal != null);
 
-    return "home";
+    return csrfToken(exchange)
+      .doOnNext(token -> model.addAttribute("_csrf", token))
+      .thenReturn("home");
+  }
+
+  @SuppressWarnings("unchecked")
+  private Mono<CsrfToken> csrfToken(ServerWebExchange exchange) {
+    return exchange.getAttributeOrDefault(
+      CsrfToken.class.getName(),
+      Mono.empty()
+    );
   }
 }
