@@ -1,0 +1,96 @@
+name: Diagnose AWS OIDC
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    if: github.repository == 'AWSome-BIT-Bespin/retail-store-app' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Check token and AWS authentication
+        env:
+          AWS_ROLE_ARN: ${{ vars.AWS_ROLE_ARN }}
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import { createPublicKey, verify } from 'node:crypto';
+
+          let stage = 'request_token';
+          try {
+            const issuer = 'https://token.actions.githubusercontent.com';
+            const expectedRole = 'arn:aws:iam::350606136784:role/retail-github-actions-ecr';
+            const expectedSub = 'repo:AWSome-BIT-Bespin@323029296/retail-store-app@1352059579:ref:refs/heads/main';
+            const getJson = async (url, options = {}) => {
+              const response = await fetch(url, { ...options, signal: AbortSignal.timeout(15000) });
+              if (!response.ok) {
+                console.log(JSON.stringify({ stage, http_status: response.status }));
+                throw new Error();
+              }
+              return response.json();
+            };
+            const url = new URL(process.env.ACTIONS_ID_TOKEN_REQUEST_URL);
+            url.searchParams.set('audience', 'sts.amazonaws.com');
+            const { value: token } = await getJson(url, {
+              headers: { Authorization: 'Bearer ' + process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN }
+            });
+            if (typeof token !== 'string' || !/^[\w-]+\.[\w-]+\.[\w-]+$/.test(token)) throw new Error();
+            console.log('::add-mask::' + token);
+
+            stage = 'check_token';
+            const [head, payload, signature] = token.split('.');
+            const header = JSON.parse(Buffer.from(head, 'base64url').toString('utf8'));
+            const claims = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+            stage = 'fetch_signing_keys';
+            const { keys } = await getJson(issuer + '/.well-known/jwks');
+            const key = keys.find(item => item.kid === header.kid);
+            stage = 'verify_token';
+            const now = Math.floor(Date.now() / 1000);
+            const checks = {
+              role_variable_matches: process.env.AWS_ROLE_ARN === expectedRole,
+              issuer_matches: claims.iss === issuer,
+              audience_matches: claims.aud === 'sts.amazonaws.com',
+              subject_matches: claims.sub === expectedSub,
+              time_valid: [claims.iat, claims.nbf, claims.exp].every(Number.isInteger)
+                && claims.iat <= now && claims.nbf <= now && now < claims.exp,
+              signing_key_found: Boolean(key),
+              signature_valid: Boolean(key && header.alg === 'RS256' && key.kty === 'RSA'
+                && verify('RSA-SHA256', Buffer.from(head + '.' + payload),
+                  createPublicKey({ key, format: 'jwk' }), Buffer.from(signature, 'base64url')))
+            };
+            console.log(JSON.stringify(checks, null, 2));
+            if (!checks.role_variable_matches) throw new Error();
+
+            stage = 'aws_sts';
+            const response = await fetch('https://sts.ap-northeast-2.amazonaws.com/', {
+              method: 'POST',
+              signal: AbortSignal.timeout(30000),
+              body: new URLSearchParams({
+                Action: 'AssumeRoleWithWebIdentity',
+                Version: '2011-06-15',
+                RoleArn: expectedRole,
+                RoleSessionName: 'oidc-diag-' + process.env.GITHUB_RUN_ID,
+                DurationSeconds: '900',
+                WebIdentityToken: token
+              })
+            });
+            const xml = await response.text();
+            console.log(JSON.stringify({
+              aws_auth_success: response.ok,
+              aws_http_status: response.status,
+              aws_error_code: response.ok ? null : (xml.match(/<Code>([A-Za-z0-9]+)<\/Code>/)?.[1] ?? 'Unknown'),
+              aws_request_id: xml.match(/<RequestId>([a-zA-Z0-9-]+)<\/RequestId>/i)?.[1] ?? 'Unavailable'
+            }, null, 2));
+            if (!response.ok || Object.values(checks).some(value => !value)) process.exitCode = 1;
+          } catch {
+            console.error('Diagnostic stopped at: ' + stage + ' (sensitive response details omitted)');
+            process.exitCode = 1;
+          }
+          NODE
