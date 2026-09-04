@@ -3,6 +3,8 @@ server:
   forward-headers-strategy: NATIVE
 
 spring:
+  session:
+    store-type: none
   messages:
     basename: lang/messages
   http:

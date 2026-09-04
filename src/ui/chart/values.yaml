@@ -84,6 +84,9 @@ app:
     #orders: http://orders:80
     #checkout: http://checkout:80
     #recommendations: http://recommendations:80
+  session:
+    redis:
+      endpoint: ""
   search:
     enabled: false
   chat:
