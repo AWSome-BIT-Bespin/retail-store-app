@@ -1,0 +1,176 @@
+name: Build retail images
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/cart/**'
+      - 'src/catalog/**'
+      - 'src/checkout/**'
+      - 'src/orders/**'
+      - 'src/ui/**'
+      - 'ci/**'
+      - '.github/actions/build-image/**'
+      - '.github/workflows/build-images.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/cart/**'
+      - 'src/catalog/**'
+      - 'src/checkout/**'
+      - 'src/orders/**'
+      - 'src/ui/**'
+      - 'ci/**'
+      - '.github/actions/build-image/**'
+      - '.github/workflows/build-images.yml'
+  workflow_dispatch:
+    inputs:
+      publish_images:
+        description: 'Publish to ECR and Artifact Registry (main branch only)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: retail-images-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  checks:
+    name: Validate CI rules
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Test image metadata and workflow safety rules
+        run: node --test ci/images.test.mjs ci/workflow.test.mjs
+      - name: Reject publication from an unsupported branch or repository
+        if: >-
+          github.event_name == 'workflow_dispatch' && inputs.publish_images &&
+          (github.ref != 'refs/heads/main' || github.repository != 'AWSome-BIT-Bespin/retail-store-app')
+        run: |
+          echo '::error::Publishing requires the original repository main branch. Select build-only for other branches.'
+          exit 1
+
+  build-check:
+    name: Build only / ${{ matrix.service }}
+    needs: checks
+    if: >-
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'workflow_dispatch' && !inputs.publish_images) ||
+      github.repository != 'AWSome-BIT-Bespin/retail-store-app'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [cart, catalog, checkout, orders, ui]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/build-image
+        with:
+          service: ${{ matrix.service }}
+      - name: Report build-only result
+        env:
+          SERVICE: ${{ matrix.service }}
+        run: node ci/images.mjs summary-build
+
+  publish:
+    name: Build and publish / ${{ matrix.service }}
+    needs: checks
+    if: >-
+      github.repository == 'AWSome-BIT-Bespin/retail-store-app' &&
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' ||
+      (github.event_name == 'workflow_dispatch' && inputs.publish_images))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [cart, catalog, checkout, orders, ui]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Validate publication scope and required identity settings
+        env:
+          PUBLISH_IMAGES: ${{ inputs.publish_images }}
+          AWS_ROLE_ARN: ${{ vars.AWS_ROLE_ARN }}
+          GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          GCP_SERVICE_ACCOUNT: ${{ vars.GCP_SERVICE_ACCOUNT }}
+        run: node ci/images.mjs check-auth
+      - name: Build the image once
+        id: image
+        uses: ./.github/actions/build-image
+        with:
+          service: ${{ matrix.service }}
+      # Authenticate after the potentially long build. No credential file enters a build context.
+      - name: Authenticate to AWS with OIDC
+        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ap-northeast-2
+          allowed-account-ids: '350606136784'
+          role-session-name: gha-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.service }}
+      - name: Log in to ECR
+        uses: aws-actions/amazon-ecr-login@03f1aad4c6c7ffd436567f42f9384779290529bd # v2.1.7
+        with:
+          registries: '350606136784'
+          mask-password: 'true'
+      - name: Authenticate to Google Cloud with Workload Identity
+        id: google
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          project_id: kdt4-3
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+          token_format: access_token
+          create_credentials_file: false
+          export_environment_variables: false
+      - name: Log in to Artifact Registry
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: asia-northeast3-docker.pkg.dev
+          username: oauth2accesstoken
+          password: ${{ steps.google.outputs.access_token }}
+      - name: Push the same local image to both registries
+        env:
+          LOCAL_IMAGE: ${{ steps.image.outputs.local-image }}
+          ECR_IMAGE: ${{ steps.image.outputs.ecr-image }}
+          GAR_IMAGE: ${{ steps.image.outputs.gar-image }}
+        run: |
+          set -euo pipefail
+          docker tag "$LOCAL_IMAGE" "$ECR_IMAGE"
+          docker tag "$LOCAL_IMAGE" "$GAR_IMAGE"
+          docker push "$ECR_IMAGE"
+          docker push "$GAR_IMAGE"
+      - name: Verify registry digests and report pull addresses
+        env:
+          SERVICE: ${{ matrix.service }}
+          ECR_IMAGE: ${{ steps.image.outputs.ecr-image }}
+          GAR_IMAGE: ${{ steps.image.outputs.gar-image }}
+        run: |
+          set -euo pipefail
+          ecr_manifest=$(docker buildx imagetools inspect "$ECR_IMAGE" --format '{{json .Manifest}}')
+          gar_manifest=$(docker buildx imagetools inspect "$GAR_IMAGE" --format '{{json .Manifest}}')
+          ECR_MANIFEST_JSON="$ecr_manifest" GAR_MANIFEST_JSON="$gar_manifest" node ci/images.mjs verify
+      - name: Report an incomplete publication
+        if: failure()
+        env:
+          SERVICE: ${{ matrix.service }}
+        run: |
+          {
+            printf '### %s: publication incomplete\n\n' "$SERVICE"
+            printf 'Do not treat this run as a verified release. A partial upload may remain in one registry.\n'
+            printf 'Existing tags and images have not been deleted. See the failed step and docs/ci-image-build.md.\n'
+          } >> "$GITHUB_STEP_SUMMARY"
