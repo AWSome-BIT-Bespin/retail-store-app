@@ -4,6 +4,7 @@ import com.amazon.sample.ui.services.orders.OrdersService;
 import com.amazon.sample.ui.web.payload.RegistrationRequest;
 import com.amazon.sample.ui.web.util.RequiresCommonAttributes;
 import jakarta.validation.Valid;
+import java.net.URI;
 import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -11,6 +12,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextImpl;
 import org.springframework.security.web.server.csrf.CsrfToken;
 import org.springframework.security.web.server.context.ServerSecurityContextRepository;
+import org.springframework.security.web.server.savedrequest.ServerRequestCache;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.validation.BindingResult;
@@ -27,13 +29,16 @@ public class AuthenticationController {
 
   private final OrdersService ordersService;
   private final ServerSecurityContextRepository securityContextRepository;
+  private final ServerRequestCache checkoutRequestCache;
 
   public AuthenticationController(
     OrdersService ordersService,
-    ServerSecurityContextRepository securityContextRepository
+    ServerSecurityContextRepository securityContextRepository,
+    ServerRequestCache checkoutRequestCache
   ) {
     this.ordersService = ordersService;
     this.securityContextRepository = securityContextRepository;
+    this.checkoutRequestCache = checkoutRequestCache;
   }
 
   @GetMapping("/login")
@@ -75,7 +80,7 @@ public class AuthenticationController {
           new SecurityContextImpl(authentication)
         );
       })
-      .thenReturn("redirect:/demo/orders")
+      .then(redirectAfterAuthentication(exchange))
       .onErrorResume(error -> {
         if (error instanceof ResponseStatusException exception) {
           model.addAttribute(
@@ -97,5 +102,25 @@ public class AuthenticationController {
       CsrfToken.class.getName(),
       Mono.empty()
     );
+  }
+
+  private Mono<String> redirectAfterAuthentication(ServerWebExchange exchange) {
+    return checkoutRequestCache
+      .getRedirectUri(exchange)
+      .filter(this::isCheckoutPath)
+      .map(this::redirectView)
+      .defaultIfEmpty("redirect:/demo/orders");
+  }
+
+  private boolean isCheckoutPath(URI redirectUri) {
+    String path = redirectUri.getRawPath();
+    return "/checkout".equals(path) ||
+    (path != null && path.startsWith("/checkout/"));
+  }
+
+  private String redirectView(URI redirectUri) {
+    String query = redirectUri.getRawQuery();
+    return "redirect:" + redirectUri.getRawPath() +
+    (query == null ? "" : "?" + query);
   }
 }

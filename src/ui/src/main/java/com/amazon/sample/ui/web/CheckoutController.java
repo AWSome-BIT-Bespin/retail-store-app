@@ -29,7 +29,7 @@ import com.amazon.sample.ui.web.util.SessionIDUtil;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.server.reactive.ServerHttpRequest;
+import org.springframework.security.web.server.csrf.CsrfToken;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.validation.BindingResult;
@@ -66,7 +66,7 @@ public class CheckoutController {
 
     model.addAttribute("shippingAddressRequest", shippingAddressRequest);
 
-    return exchange
+    Mono<String> shippingView = exchange
       .getPrincipal()
       .doOnNext(principal -> shippingAddressRequest.setEmail(principal.getName()))
       .hasElement()
@@ -78,6 +78,7 @@ public class CheckoutController {
         model.addAttribute("checkout", o);
       })
       .thenReturn("checkout-shipping");
+    return addCsrfToken(exchange, model).then(shippingView);
   }
 
   @PostMapping
@@ -109,7 +110,7 @@ public class CheckoutController {
         address.setEmail(email);
         String sessionId = SessionIDUtil.getSessionId(exchange.getRequest());
 
-        return this.checkoutService.shipping(sessionId, address).map(c -> {
+        return this.checkoutService.shipping(sessionId, address).flatMap(c -> {
             String defaultToken = null;
 
             if (c.getShippingOptions().size() > 0) {
@@ -118,17 +119,17 @@ public class CheckoutController {
             return this.showDelivery(
                 c,
                 new CheckoutDeliveryMethodRequest(defaultToken),
-                exchange.getRequest(),
+                exchange,
                 model
               );
           });
       });
   }
 
-  public String showDelivery(
+  public Mono<String> showDelivery(
     Checkout checkout,
     CheckoutDeliveryMethodRequest checkoutDeliveryMethodRequest,
-    ServerHttpRequest request,
+    ServerWebExchange exchange,
     Model model
   ) {
     model.addAttribute(
@@ -137,7 +138,7 @@ public class CheckoutController {
     );
     model.addAttribute("checkout", checkout);
 
-    return "checkout-delivery";
+    return addCsrfToken(exchange, model).thenReturn("checkout-delivery");
   }
 
   @PostMapping("/delivery")
@@ -146,14 +147,14 @@ public class CheckoutController {
       "checkoutDeliveryMethodRequest"
     ) CheckoutDeliveryMethodRequest checkoutDeliveryMethodRequest,
     BindingResult result,
-    ServerHttpRequest request,
+    ServerWebExchange exchange,
     Model model
   ) {
-    String sessionId = SessionIDUtil.getSessionId(request);
+    String sessionId = SessionIDUtil.getSessionId(exchange.getRequest());
 
     if (result.hasErrors()) {
-      return this.checkoutService.get(sessionId).map(c ->
-          showDelivery(c, checkoutDeliveryMethodRequest, request, model)
+      return this.checkoutService.get(sessionId).flatMap(c ->
+          showDelivery(c, checkoutDeliveryMethodRequest, exchange, model)
         );
     }
 
@@ -162,21 +163,21 @@ public class CheckoutController {
     return this.checkoutService.delivery(
         sessionId,
         checkoutDeliveryMethodRequest.getToken()
-      ).map(c ->
-        this.showPayment(c, new PaymentDetailsRequest(), request, model)
+      ).flatMap(c ->
+        this.showPayment(c, new PaymentDetailsRequest(), exchange, model)
       );
   }
 
-  public String showPayment(
+  public Mono<String> showPayment(
     Checkout checkout,
     PaymentDetailsRequest paymentDetailsRequest,
-    ServerHttpRequest request,
+    ServerWebExchange exchange,
     Model model
   ) {
     model.addAttribute("paymentDetailsRequest", paymentDetailsRequest);
     model.addAttribute("checkout", checkout);
 
-    return "checkout-payment";
+    return addCsrfToken(exchange, model).thenReturn("checkout-payment");
   }
 
   @PostMapping("/payment")
@@ -185,14 +186,14 @@ public class CheckoutController {
       "paymentDetailsRequest"
     ) PaymentDetailsRequest paymentDetailsRequest,
     BindingResult result,
-    ServerHttpRequest request,
+    ServerWebExchange exchange,
     Model model
   ) {
-    String sessionId = SessionIDUtil.getSessionId(request);
+    String sessionId = SessionIDUtil.getSessionId(exchange.getRequest());
 
     if (result.hasErrors()) {
-      return this.checkoutService.get(sessionId).map(c ->
-          showPayment(c, paymentDetailsRequest, request, model)
+      return this.checkoutService.get(sessionId).flatMap(c ->
+          showPayment(c, paymentDetailsRequest, exchange, model)
         );
     }
 
@@ -202,4 +203,19 @@ public class CheckoutController {
       })
       .thenReturn("order");
   }
+
+  @SuppressWarnings("unchecked")
+  private Mono<CsrfToken> csrfToken(ServerWebExchange exchange) {
+    return exchange.getAttributeOrDefault(
+      CsrfToken.class.getName(),
+      Mono.empty()
+    );
+  }
+
+  private Mono<Void> addCsrfToken(ServerWebExchange exchange, Model model) {
+    return csrfToken(exchange)
+      .doOnNext(token -> model.addAttribute("_csrf", token))
+      .then();
+  }
+
 }
