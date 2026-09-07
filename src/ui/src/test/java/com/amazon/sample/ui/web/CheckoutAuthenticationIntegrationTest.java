@@ -127,6 +127,17 @@ class CheckoutAuthenticationIntegrationTest {
   }
 
   @Test
+  void showsServingPodNameOnRenderedPages() {
+    String podName = System.getenv("METADATA_KUBERNETES_POD_NAME");
+    String expectedPodName = podName == null || podName.isBlank() ? "local" : podName;
+
+    get("/login", Browser.empty())
+      .expectStatus().isOk()
+      .expectBody(String.class)
+      .value(body -> assertThat(body).contains("data-ui-pod=\"" + expectedPodName + "\""));
+  }
+
+  @Test
   void requiresCsrfForCheckoutPostAndUsesPrincipalEmail() {
     Browser browser = login(requestCheckout(Browser.empty()), "/checkout");
     EntityExchangeResult<String> checkoutPage = get("/checkout", browser)
