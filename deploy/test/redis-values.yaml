@@ -1,0 +1,7 @@
+fullnameOverride: retail-redis
+
+replicaCount: 1
+
+service:
+  type: ClusterIP
+  port: 6379

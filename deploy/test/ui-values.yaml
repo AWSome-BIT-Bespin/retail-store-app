@@ -1,0 +1,4 @@
+app:
+  session:
+    redis:
+      endpoint: retail-redis:6379

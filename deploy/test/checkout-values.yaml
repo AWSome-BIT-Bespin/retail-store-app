@@ -1,0 +1,9 @@
+app:
+  persistence:
+    provider: redis
+    redis:
+      endpoint: retail-redis:6379
+      tls: false
+
+redis:
+  create: false
