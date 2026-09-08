@@ -26,6 +26,8 @@
 
 The approved design is `docs/superpowers/specs/2026-09-09-formal-image-release-design.md`.
 
+> **Execution note (2026-09-09):** The user limited local verification to one final attempt. The implementation and tests were prepared without running the intermediate Red/Green commands below; the complete suite, Git-aware planner check, and diff checks are consolidated into one final verification command. A failure is reported before any retry.
+
 ### Task 1: Add the version manifest and constrained parser
 
 **Files:**
@@ -361,7 +363,7 @@ function executePlan() {
     : commit('BASE_SHA', baseValue);
   const paths = base === null
     ? git(['ls-tree', '-r', '--name-only', head]).split('\n').filter(Boolean)
-    : git(['diff', '--name-only', base, head, '--']).split('\n').filter(Boolean);
+    : git(['diff', '--name-only', `${base}...${head}`, '--']).split('\n').filter(Boolean);
   const baseHasManifest = base !== null
     && git(['ls-tree', '--name-only', base, '--', 'versions.yaml']) === 'versions.yaml';
   const current = readVersionsAt(head);
