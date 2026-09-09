@@ -15,11 +15,19 @@ const base = {
   GITHUB_REF: 'refs/heads/main',
   GITHUB_EVENT_NAME: 'push',
   PUBLISH_IMAGES: '',
+  IMAGE_TAG: 'v0.0.2',
   AWS_ROLE_ARN: 'arn:aws:iam::350606136784:role/ci-image-publisher',
   GCP_WORKLOAD_IDENTITY_PROVIDER: 'projects/123456789/locations/global/workloadIdentityPools/ci-pool/providers/github',
   GCP_SERVICE_ACCOUNT: 'ci-publisher@kdt4-3.iam.gserviceaccount.com',
   ECR_MANIFEST_JSON: JSON.stringify({ digest }),
   GAR_MANIFEST_JSON: JSON.stringify({ digest }),
+  ECR_LOOKUP_JSON: JSON.stringify({
+    imageCount: 0,
+    failureCodes: ['ImageNotFound'],
+  }),
+  GAR_HTTP_STATUS: '404',
+  ECR_PUSH_OUTCOME: '',
+  GAR_PUSH_OUTCOME: '',
   GITHUB_OUTPUT: '',
   GITHUB_STEP_SUMMARY: '',
 };
@@ -45,25 +53,31 @@ function failure(command, overrides, message) {
 }
 
 for (const service of ['cart', 'catalog', 'checkout', 'orders', 'ui']) {
-  test(`metadata maps ${service} to both approved registries`, () => {
+  test(`metadata maps ${service} and the formal tag to both registries`, () => {
     const actual = success('metadata', { SERVICE: service });
-    const tag = `sha-${sha}-run-12345-1`;
+    const image = `retail-${service}:v0.0.2`;
     assert.deepEqual(actual, {
       service,
-      tag,
-      local_image: `retail-${service}:${tag}`,
-      ecr_image: `350606136784.dkr.ecr.ap-northeast-2.amazonaws.com/retail-${service}:${tag}`,
-      gar_image: `asia-northeast3-docker.pkg.dev/kdt4-3/retail-store/retail-${service}:${tag}`,
+      tag: 'v0.0.2',
+      local_image: image,
+      ecr_image: `350606136784.dkr.ecr.ap-northeast-2.amazonaws.com/${image}`,
+      gar_image: `asia-northeast3-docker.pkg.dev/kdt4-3/retail-store/${image}`,
     });
   });
 }
 
-test('different runs and reruns never reuse a tag', () => {
-  const first = success('metadata').tag;
-  assert.notEqual(first, success('metadata', { GITHUB_RUN_ID: '12346' }).tag);
-  assert.notEqual(first, success('metadata', { GITHUB_RUN_ATTEMPT: '2' }).tag);
-  assert.ok(!['latest', 'test', 'v0.0.1', 'v0.1.0', 'v0.1.2'].includes(first));
+test('build-only metadata uses a non-published run-unique local tag', () => {
+  const first = success('metadata', { IMAGE_TAG: '' }).tag;
+  const rerun = success('metadata', { IMAGE_TAG: '', GITHUB_RUN_ATTEMPT: '2' }).tag;
+  assert.equal(first, `build-${sha}-run-12345-1`);
+  assert.notEqual(first, rerun);
 });
+
+for (const value of ['latest', 'test', 'sha-abc', 'v01.0.0', 'v1.0', 'v1.0.0\n']) {
+  test(`rejects invalid formal image tag ${JSON.stringify(value)}`, () => {
+    failure('metadata', { IMAGE_TAG: value }, /IMAGE_TAG/);
+  });
+}
 
 for (const value of ['', 'ui-backup', '../orders', 'cart\ninjected=value']) {
   test(`rejects unsupported service ${JSON.stringify(value)}`, () => {
@@ -93,6 +107,10 @@ test('accepts explicit main-branch manual publication', () => {
   assert.deepEqual(success('check-auth', {
     GITHUB_EVENT_NAME: 'workflow_dispatch', PUBLISH_IMAGES: 'true',
   }), { ok: true });
+});
+
+test('trusted publication still requires a formal image tag', () => {
+  failure('check-auth', { IMAGE_TAG: '' }, /IMAGE_TAG/);
 });
 
 for (const overrides of [
@@ -130,6 +148,30 @@ test('rejects a non-service-account email without echoing its value', () => {
   assert.ok(!result.stderr.includes('do-not-echo-this-sensitive-value'));
 });
 
+test('accepts when the formal tag is absent from both registries', () => {
+  assert.deepEqual(success('assert-tag-absent'), { ecr: 'absent', gar: 'absent' });
+});
+
+test('rejects an existing ECR tag before any push', () => {
+  failure('assert-tag-absent', {
+    ECR_LOOKUP_JSON: JSON.stringify({ imageCount: 1, failureCodes: [] }),
+  }, /already exists in ECR/);
+});
+
+test('rejects an existing GAR tag before any push', () => {
+  failure('assert-tag-absent', { GAR_HTTP_STATUS: '200' }, /already exists in GAR/);
+});
+
+test('fails closed when ECR cannot confirm absence', () => {
+  failure('assert-tag-absent', {
+    ECR_LOOKUP_JSON: JSON.stringify({ imageCount: 0, failureCodes: ['AccessDenied'] }),
+  }, /Unable to confirm ECR tag absence/);
+});
+
+test('fails closed when GAR cannot confirm absence', () => {
+  failure('assert-tag-absent', { GAR_HTTP_STATUS: '500' }, /Unable to confirm GAR tag absence/);
+});
+
 test('equal registry digests produce immutable pull references', () => {
   const result = success('verify');
   assert.equal(result.digest, digest);
@@ -150,9 +192,17 @@ test('malformed registry JSON fails verification', () => {
 });
 
 test('build-only summary explicitly says the image was not published', () => {
-  const result = success('summary-build');
+  const result = success('summary-build', { IMAGE_TAG: '' });
   assert.equal(result.published, false);
   assert.equal(result.service, 'cart');
+});
+
+test('incomplete summary reports individual push outcomes', () => {
+  const result = success('summary-incomplete', {
+    ECR_PUSH_OUTCOME: 'success',
+    GAR_PUSH_OUTCOME: 'failure',
+  });
+  assert.deepEqual(result, { service: 'cart', tag: 'v0.0.2', ecr: 'success', gar: 'failure' });
 });
 
 test('unknown CLI command fails', () => {

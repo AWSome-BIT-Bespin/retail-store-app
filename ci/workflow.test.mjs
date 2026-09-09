@@ -4,7 +4,7 @@ import { test } from 'node:test';
 
 function source(path) {
   const url = new URL(path, import.meta.url);
-  return existsSync(url) ? readFileSync(url, 'utf8') : '';
+  return existsSync(url) ? readFileSync(url, 'utf8').replaceAll('\r\n', '\n') : '';
 }
 
 const workflow = source('../.github/workflows/build-images.yml');
@@ -25,14 +25,14 @@ test('only the original repository main branch can enter the publishing job', ()
   assert.ok(!workflow.split('\n  publish:\n')[0].includes('id-token: write'));
 });
 
-test('all five service builds run without matrix fail-fast cancellation', () => {
-  const matrices = [...workflow.matchAll(/service: \[cart, catalog, checkout, orders, ui\]/g)];
-  assert.equal(matrices.length, 2);
-  assert.equal([...workflow.matchAll(/fail-fast: false/g)].length, 2);
-});
-
 test('manual runs default to no publication', () => {
   assert.match(workflow, /publish_images:\n\s+description:.*\n\s+type: boolean\n\s+default: false/);
+});
+
+test('push and manual publication on the same ref cannot race each other', () => {
+  assert.match(workflow, /group: retail-images-\$\{\{ github\.ref \}\}/);
+  assert.ok(!workflow.includes('group: retail-images-${{ github.event_name }}'));
+  assert.match(workflow, /cancel-in-progress: false/);
 });
 
 test('external actions are pinned to full commit SHAs', () => {
@@ -51,6 +51,54 @@ test('build runs before cloud authentication and does not publish itself', () =>
   assert.match(build, /push: false/);
   assert.match(build, /platforms: linux\/amd64/);
   assert.match(workflow, /create_credentials_file: false/);
+});
+
+test('the build action accepts an optional formal tag and exports it', () => {
+  assert.match(build, /\n  tag:\n\s+description:/);
+  assert.match(build, /IMAGE_TAG: \$\{\{ inputs\.tag \}\}/);
+  assert.match(build, /\n  tag:\n\s+description:.*\n\s+value: \$\{\{ steps\.metadata\.outputs\.tag \}\}/);
+});
+
+test('versions.yaml triggers PR and main release planning', () => {
+  assert.equal((workflow.match(/- 'versions\.yaml'/g) ?? []).length, 2);
+});
+
+test('the plan job emits dynamic build and release matrices', () => {
+  assert.match(workflow, /release_matrix: \$\{\{ steps\.release_plan\.outputs\.release_matrix \}\}/);
+  assert.match(workflow, /build_matrix: \$\{\{ steps\.release_plan\.outputs\.build_matrix \}\}/);
+  assert.match(workflow, /node ci\/releases\.mjs plan/);
+  assert.match(workflow, /node --test ci\/images\.test\.mjs ci\/releases\.test\.mjs ci\/workflow\.test\.mjs/);
+});
+
+test('build-only and publish jobs use planned matrices without fail-fast cancellation', () => {
+  assert.equal((workflow.match(/fail-fast: false/g) ?? []).length, 2);
+  assert.match(workflow, /include: \$\{\{ fromJSON\(needs\.plan\.outputs\.build_matrix\) \}\}/);
+  assert.match(workflow, /include: \$\{\{ fromJSON\(needs\.plan\.outputs\.release_matrix\) \}\}/);
+});
+
+test('formal publication passes the planned version to build and verification', () => {
+  const publish = workflow.split('\n  publish:\n')[1] ?? '';
+  assert.match(publish, /tag: \$\{\{ matrix\.version \}\}/);
+  assert.match(publish, /IMAGE_TAG: \$\{\{ matrix\.version \}\}/);
+  assert.ok(!publish.includes('sha-${{'));
+});
+
+test('tag absence is confirmed before separate ECR and GAR pushes', () => {
+  const publish = workflow.split('\n  publish:\n')[1] ?? '';
+  const preflight = publish.indexOf('node ci/images.mjs assert-tag-absent');
+  const ecrPush = publish.indexOf('id: push_ecr');
+  const garPush = publish.indexOf('id: push_gar');
+  assert.ok(preflight >= 0);
+  assert.ok(preflight < ecrPush);
+  assert.ok(ecrPush < garPush);
+  assert.match(publish, /aws ecr batch-get-image/);
+  assert.match(publish, /artifactregistry\.googleapis\.com\/v1\//);
+});
+
+test('an incomplete publication reports both push step outcomes', () => {
+  assert.match(workflow, /ECR_PUSH_OUTCOME: \$\{\{ steps\.push_ecr\.outcome \}\}/);
+  assert.match(workflow, /GAR_PUSH_OUTCOME: \$\{\{ steps\.push_gar\.outcome \}\}/);
+  assert.match(workflow, /node ci\/images\.mjs summary-incomplete/);
 });
 
 test('publishing verifies registry digests and never edits deployments', () => {

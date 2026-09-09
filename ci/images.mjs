@@ -4,6 +4,7 @@ const services = ['cart', 'catalog', 'checkout', 'orders', 'ui'];
 const repository = 'AWSome-BIT-Bespin/retail-store-app';
 const ecr = '350606136784.dkr.ecr.ap-northeast-2.amazonaws.com';
 const gar = 'asia-northeast3-docker.pkg.dev/kdt4-3/retail-store';
+const versionTagPattern = /^v(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})$/;
 
 function setting(name, pattern) {
   const value = process.env[name] ?? '';
@@ -19,7 +20,9 @@ function metadata() {
   const sha = setting('GITHUB_SHA', /^[a-f0-9]{40}$/);
   const run = setting('GITHUB_RUN_ID', /^[1-9][0-9]{0,19}$/);
   const attempt = setting('GITHUB_RUN_ATTEMPT', /^[1-9][0-9]{0,9}$/);
-  const tag = `sha-${sha}-run-${run}-${attempt}`;
+  const requested = process.env.IMAGE_TAG ?? '';
+  if (requested && !versionTagPattern.test(requested)) throw new Error('Missing or invalid IMAGE_TAG.');
+  const tag = requested || `build-${sha}-run-${run}-${attempt}`;
   const image = `retail-${service}:${tag}`;
   return { service, tag, local_image: image, ecr_image: `${ecr}/${image}`, gar_image: `${gar}/${image}` };
 }
@@ -31,6 +34,7 @@ function checkAuth() {
   if (env.GITHUB_REPOSITORY !== repository || env.GITHUB_REF !== 'refs/heads/main' || !allowedEvent) {
     throw new Error('Publishing is only allowed from the original repository main branch on push or an explicit manual publish run.');
   }
+  setting('IMAGE_TAG', versionTagPattern);
   setting('AWS_ROLE_ARN', /^arn:aws:iam::350606136784:role\/[A-Za-z0-9+=,.@_/-]+$/);
   setting('GCP_WORKLOAD_IDENTITY_PROVIDER', /^projects\/[0-9]+\/locations\/global\/workloadIdentityPools\/[a-z0-9-]+\/providers\/[a-z0-9-]+$/);
   setting('GCP_SERVICE_ACCOUNT', /^[a-z0-9][a-z0-9-]*@[a-z0-9][a-z0-9-]*\.iam\.gserviceaccount\.com$/);
@@ -50,14 +54,64 @@ function registryDigest(name) {
   return value;
 }
 
+function jsonSetting(name) {
+  try {
+    return JSON.parse(process.env[name] ?? '');
+  } catch {
+    throw new Error(`Invalid ${name}.`);
+  }
+}
+
+function assertTagAbsent() {
+  setting('IMAGE_TAG', versionTagPattern);
+  const ecrLookup = jsonSetting('ECR_LOOKUP_JSON');
+  const imageCount = Number.isInteger(ecrLookup.imageCount) ? ecrLookup.imageCount : -1;
+  const failureCodes = Array.isArray(ecrLookup.failureCodes) ? ecrLookup.failureCodes : [];
+  if (imageCount > 0) throw new Error('Formal image tag already exists in ECR.');
+  if (imageCount !== 0 || !failureCodes.includes('ImageNotFound')) {
+    throw new Error('Unable to confirm ECR tag absence.');
+  }
+
+  const garStatus = process.env.GAR_HTTP_STATUS ?? '';
+  if (garStatus === '200') throw new Error('Formal image tag already exists in GAR.');
+  if (garStatus !== '404') throw new Error('Unable to confirm GAR tag absence.');
+  return { ecr: 'absent', gar: 'absent' };
+}
+
+function outcome(name) {
+  const value = process.env[name] || 'not-run';
+  return ['success', 'failure', 'cancelled', 'skipped', 'not-run'].includes(value) ? value : 'unknown';
+}
+
 function summary(lines) {
   if (process.env.GITHUB_STEP_SUMMARY) {
     appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${lines.join('\n')}\n`, 'utf8');
   }
 }
 
+function summaryIncomplete() {
+  const info = metadata();
+  const result = {
+    service: info.service,
+    tag: info.tag,
+    ecr: outcome('ECR_PUSH_OUTCOME'),
+    gar: outcome('GAR_PUSH_OUTCOME'),
+  };
+  summary([
+    `### ${info.service} ${info.tag}: publication incomplete`, '',
+    `- ECR push step: \`${result.ecr}\``,
+    `- GAR push step: \`${result.gar}\``, '',
+    'Do not treat this run as a verified release.',
+    'A tag may remain in one registry. No tag was deleted or overwritten automatically.',
+    'Inspect both registries before choosing a recovery action.', '',
+  ]);
+  return result;
+}
+
 function execute(command) {
   if (command === 'check-auth') return checkAuth();
+  if (command === 'assert-tag-absent') return assertTagAbsent();
+  if (command === 'summary-incomplete') return summaryIncomplete();
   if (!['metadata', 'summary-build', 'verify'].includes(command)) throw new Error('Unknown command.');
   const info = metadata();
   if (command === 'metadata') {
@@ -85,14 +139,14 @@ function execute(command) {
     gar_pull: `${gar}/retail-${info.service}@${garDigest}`,
   };
   summary([
-    `### ${info.service}: published and digest-verified`, '',
-    `Tag: \`${info.tag}\``, '',
+    `### ${info.service} ${info.tag}: formal release published`, '',
     '| Registry | Image |', '| --- | --- |',
     `| ECR | \`${info.ecr_image}\` |`,
     `| Artifact Registry | \`${info.gar_image}\` |`, '',
     `Both registry manifest digests: \`${result.digest}\``, '',
+    `Source commit: \`${process.env.GITHUB_SHA}\``, '',
     'Immutable pull references:', '', '```text', result.ecr_pull, result.gar_pull, '```', '',
-    'No GitOps configuration or cluster was changed. Application tests are outside this initial build workflow.', '',
+    'No GitOps configuration or cluster was changed.', '',
   ]);
   return result;
 }

@@ -4,6 +4,10 @@ inputs:
   service:
     description: One of cart, catalog, checkout, orders, or ui.
     required: true
+  tag:
+    description: Formal vMAJOR.MINOR.PATCH tag for publication; empty for build-only validation.
+    required: false
+    default: ''
 outputs:
   local-image:
     description: Local Docker image reference.
@@ -14,14 +18,18 @@ outputs:
   gar-image:
     description: Intended Artifact Registry image reference; existence is not implied.
     value: ${{ steps.metadata.outputs.gar_image }}
+  tag:
+    description: Validated formal or build-only local tag.
+    value: ${{ steps.metadata.outputs.tag }}
 runs:
   using: composite
   steps:
-    - name: Create unique image references
+    - name: Create validated image references
       id: metadata
       shell: bash
       env:
         SERVICE: ${{ inputs.service }}
+        IMAGE_TAG: ${{ inputs.tag }}
       run: node ci/images.mjs metadata
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0

@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
     paths:
+      - 'versions.yaml'
       - 'src/cart/**'
       - 'src/catalog/**'
       - 'src/checkout/**'
@@ -15,6 +16,7 @@ on:
   pull_request:
     branches: [main]
     paths:
+      - 'versions.yaml'
       - 'src/cart/**'
       - 'src/catalog/**'
       - 'src/checkout/**'
@@ -26,7 +28,7 @@ on:
   workflow_dispatch:
     inputs:
       publish_images:
-        description: 'Publish to ECR and Artifact Registry (main branch only)'
+        description: 'Publish newly versioned images to ECR and Artifact Registry (main branch only)'
         type: boolean
         default: false
 
@@ -34,20 +36,26 @@ permissions:
   contents: read
 
 concurrency:
-  group: retail-images-${{ github.event_name }}-${{ github.ref }}
+  group: retail-images-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  checks:
-    name: Validate CI rules
+  plan:
+    name: Validate and plan image changes
     runs-on: ubuntu-24.04
     timeout-minutes: 5
+    outputs:
+      release_matrix: ${{ steps.release_plan.outputs.release_matrix }}
+      release_count: ${{ steps.release_plan.outputs.release_count }}
+      build_matrix: ${{ steps.release_plan.outputs.build_matrix }}
+      build_count: ${{ steps.release_plan.outputs.build_count }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Test image metadata and workflow safety rules
-        run: node --test ci/images.test.mjs ci/workflow.test.mjs
+          fetch-depth: 0
+      - name: Test image release and workflow safety rules
+        run: node --test ci/images.test.mjs ci/releases.test.mjs ci/workflow.test.mjs
       - name: Reject publication from an unsupported branch or repository
         if: >-
           github.event_name == 'workflow_dispatch' && inputs.publish_images &&
@@ -55,25 +63,35 @@ jobs:
         run: |
           echo '::error::Publishing requires the original repository main branch. Select build-only for other branches.'
           exit 1
+      - name: Validate versions and create service matrices
+        id: release_plan
+        env:
+          BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          FORCE_BUILD_ALL: ${{ github.event_name == 'workflow_dispatch' && !inputs.publish_images }}
+        run: node ci/releases.mjs plan
 
   build-check:
     name: Build only / ${{ matrix.service }}
-    needs: checks
+    needs: plan
     if: >-
-      github.event_name == 'pull_request' ||
+      needs.plan.result == 'success' && needs.plan.outputs.build_count != '0' &&
+      (github.event_name == 'pull_request' ||
       (github.event_name == 'workflow_dispatch' && !inputs.publish_images) ||
-      github.repository != 'AWSome-BIT-Bespin/retail-store-app'
+      (github.event_name == 'push' && needs.plan.outputs.release_count == '0') ||
+      github.repository != 'AWSome-BIT-Bespin/retail-store-app')
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
-        service: [cart, catalog, checkout, orders, ui]
+        include: ${{ fromJSON(needs.plan.outputs.build_matrix) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: ./.github/actions/build-image
+      - id: image
+        uses: ./.github/actions/build-image
         with:
           service: ${{ matrix.service }}
       - name: Report build-only result
@@ -82,9 +100,10 @@ jobs:
         run: node ci/images.mjs summary-build
 
   publish:
-    name: Build and publish / ${{ matrix.service }}
-    needs: checks
+    name: Build and publish / ${{ matrix.service }} ${{ matrix.version }}
+    needs: plan
     if: >-
+      needs.plan.result == 'success' && needs.plan.outputs.release_count != '0' &&
       github.repository == 'AWSome-BIT-Bespin/retail-store-app' &&
       github.ref == 'refs/heads/main' &&
       (github.event_name == 'push' ||
@@ -97,7 +116,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [cart, catalog, checkout, orders, ui]
+        include: ${{ fromJSON(needs.plan.outputs.release_matrix) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -105,6 +124,7 @@ jobs:
       - name: Validate publication scope and required identity settings
         env:
           PUBLISH_IMAGES: ${{ inputs.publish_images }}
+          IMAGE_TAG: ${{ matrix.version }}
           AWS_ROLE_ARN: ${{ vars.AWS_ROLE_ARN }}
           GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           GCP_SERVICE_ACCOUNT: ${{ vars.GCP_SERVICE_ACCOUNT }}
@@ -114,6 +134,7 @@ jobs:
         uses: ./.github/actions/build-image
         with:
           service: ${{ matrix.service }}
+          tag: ${{ matrix.version }}
       # Authenticate after the potentially long build. No credential file enters a build context.
       - name: Authenticate to AWS with OIDC
         uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
@@ -143,7 +164,26 @@ jobs:
           registry: asia-northeast3-docker.pkg.dev
           username: oauth2accesstoken
           password: ${{ steps.google.outputs.access_token }}
-      - name: Push the same local image to both registries
+      - name: Confirm the formal tag is unused in both registries
+        env:
+          SERVICE: ${{ matrix.service }}
+          IMAGE_TAG: ${{ matrix.version }}
+          GAR_ACCESS_TOKEN: ${{ steps.google.outputs.access_token }}
+        run: |
+          set -euo pipefail
+          ecr_lookup=$(aws ecr batch-get-image \
+            --repository-name "retail-${SERVICE}" \
+            --image-ids "imageTag=${IMAGE_TAG}" \
+            --query '{imageCount:length(images),failureCodes:failures[].failureCode}' \
+            --output json)
+          gar_url="https://artifactregistry.googleapis.com/v1/projects/kdt4-3/locations/asia-northeast3/repositories/retail-store/packages/retail-${SERVICE}/tags/${IMAGE_TAG}"
+          gar_status=$(curl --silent --show-error \
+            --output "${RUNNER_TEMP}/gar-tag-${SERVICE}.json" \
+            --write-out '%{http_code}' \
+            --header "Authorization: Bearer ${GAR_ACCESS_TOKEN}" \
+            "$gar_url")
+          ECR_LOOKUP_JSON="$ecr_lookup" GAR_HTTP_STATUS="$gar_status" node ci/images.mjs assert-tag-absent
+      - name: Apply the same formal tag to both registry references
         env:
           LOCAL_IMAGE: ${{ steps.image.outputs.local-image }}
           ECR_IMAGE: ${{ steps.image.outputs.ecr-image }}
@@ -152,11 +192,20 @@ jobs:
           set -euo pipefail
           docker tag "$LOCAL_IMAGE" "$ECR_IMAGE"
           docker tag "$LOCAL_IMAGE" "$GAR_IMAGE"
-          docker push "$ECR_IMAGE"
-          docker push "$GAR_IMAGE"
+      - name: Push the formal image to ECR
+        id: push_ecr
+        env:
+          ECR_IMAGE: ${{ steps.image.outputs.ecr-image }}
+        run: docker push "$ECR_IMAGE"
+      - name: Push the formal image to GAR
+        id: push_gar
+        env:
+          GAR_IMAGE: ${{ steps.image.outputs.gar-image }}
+        run: docker push "$GAR_IMAGE"
       - name: Verify registry digests and report pull addresses
         env:
           SERVICE: ${{ matrix.service }}
+          IMAGE_TAG: ${{ matrix.version }}
           ECR_IMAGE: ${{ steps.image.outputs.ecr-image }}
           GAR_IMAGE: ${{ steps.image.outputs.gar-image }}
         run: |
@@ -168,9 +217,7 @@ jobs:
         if: failure()
         env:
           SERVICE: ${{ matrix.service }}
-        run: |
-          {
-            printf '### %s: publication incomplete\n\n' "$SERVICE"
-            printf 'Do not treat this run as a verified release. A partial upload may remain in one registry.\n'
-            printf 'Existing tags and images have not been deleted. See the failed step and docs/ci-image-build.md.\n'
-          } >> "$GITHUB_STEP_SUMMARY"
+          IMAGE_TAG: ${{ matrix.version }}
+          ECR_PUSH_OUTCOME: ${{ steps.push_ecr.outcome }}
+          GAR_PUSH_OUTCOME: ${{ steps.push_gar.outcome }}
+        run: node ci/images.mjs summary-incomplete

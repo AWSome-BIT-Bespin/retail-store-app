@@ -1,0 +1,6 @@
+images:
+  cart: v0.0.2
+  catalog: v0.0.2
+  checkout: v0.0.3
+  orders: v0.1.1
+  ui: v0.1.6
