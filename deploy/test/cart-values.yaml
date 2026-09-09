@@ -1,0 +1,13 @@
+app:
+  persistence:
+    provider: dynamodb
+    dynamodb:
+      tableName: retail-test-cart
+      createTable: false
+
+dynamodb:
+  create: false
+
+serviceAccount:
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::350606136784:role/RetailTestCartDynamoDBRole
