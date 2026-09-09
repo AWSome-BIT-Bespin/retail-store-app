@@ -61,14 +61,18 @@ import (
 func main() {
 	ctx := context.Background()
 
-	_, otelPresent := os.LookupEnv("OTEL_SERVICE_NAME")
+	// WhaTap 배포에서는 Helm이 OTEL_ENABLED=false를 넣어 기존 OTel을 끕니다.
+// 값이 없으면 기존 OTel 동작을 그대로 유지합니다.
+otelEnabled := os.Getenv("OTEL_ENABLED") != "false"
 
-	if otelPresent {
-		_, err := initTracer(ctx)
-		if err != nil {
-			log.Fatal(err)
-		}
+_, otelPresent := os.LookupEnv("OTEL_SERVICE_NAME")
+
+if otelEnabled && otelPresent {
+	_, err := initTracer(ctx)
+	if err != nil {
+		log.Fatal(err)
 	}
+}
 
 	var config config.AppConfiguration
 	if err := envconfig.Process(ctx, &config); err != nil {
@@ -125,7 +129,9 @@ func main() {
 	catalog := r.Group("/catalog")
 
 	catalog.Use(chaosController.ChaosMiddleware())
+	if otelEnabled {
 	catalog.Use(otelgin.Middleware("catalog-server"))
+}
 
 	catalog.GET("/products", c.GetProducts)
 

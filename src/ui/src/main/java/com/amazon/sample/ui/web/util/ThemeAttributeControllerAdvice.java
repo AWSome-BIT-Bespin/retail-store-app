@@ -79,4 +79,10 @@ public class ThemeAttributeControllerAdvice {
   ) {
     return this.getTheme(request, response);
   }
+
+  @ModelAttribute("uiPodName")
+  public String addUiPodName() {
+    String podName = System.getenv("METADATA_KUBERNETES_POD_NAME");
+    return podName == null || podName.isBlank() ? "local" : podName;
+  }
 }
