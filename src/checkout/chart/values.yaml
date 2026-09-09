@@ -112,7 +112,7 @@ opentelemetry:
   instrumentation: ''
 
 whatap:
-  enabled: false
+  enabled: true
   secretName: ''
   serverHost: ''
   okind: checkout
