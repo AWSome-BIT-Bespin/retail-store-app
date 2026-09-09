@@ -15,8 +15,10 @@
  * OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
-
-import otelSDK from './tracing';
+import WhatapAgent from 'whatap';
+if (process.env.WHATAP_LICENSE && process.env.WHATAP_SERVER_HOST) {
+  WhatapAgent.NodeAgent;
+}
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
@@ -25,7 +27,10 @@ import { CheckoutModule } from './checkout/checkout.module';
 
 async function bootstrap() {
   // Start SDK before nestjs factory create
+  if (process.env.OTEL_ENABLED !== 'false') {
+  const { default: otelSDK } = await import('./tracing');
   await otelSDK.start();
+}
 
   const app = await NestFactory.create(AppModule);
   app.useGlobalPipes(new ValidationPipe());

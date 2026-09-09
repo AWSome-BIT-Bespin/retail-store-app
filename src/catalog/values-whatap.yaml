@@ -1,0 +1,10 @@
+image:
+  repository: 350606136784.dkr.ecr.ap-northeast-2.amazonaws.com/retail-catalog
+  tag: "whatap-v1"
+  
+whatap:
+  enabled: true
+  secretName: "catalog-whatap"
+  serverHost: "13.124.11.223/13.209.172.35"
+  appName: "catalog"
+  okind: "catalog"

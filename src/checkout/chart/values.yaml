@@ -111,6 +111,12 @@ opentelemetry:
   enabled: false
   instrumentation: ''
 
+whatap:
+  enabled: false
+  secretName: ''
+  serverHost: ''
+  okind: checkout
+  
 podDisruptionBudget:
   enabled: false
   minAvailable: 2
