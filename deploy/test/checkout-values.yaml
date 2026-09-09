@@ -2,7 +2,7 @@ app:
   persistence:
     provider: redis
     redis:
-      endpoint: retail-redis:6379
+      endpoint: retail-test-redis.lk6esl.ng.0001.apn2.cache.amazonaws.com:6379
       tls: false
 
 redis:
