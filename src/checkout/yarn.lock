@@ -4737,6 +4737,7 @@ __metadata:
     "@willsoto/nestjs-prometheus": "npm:^6.0.2"
     class-transformer: "npm:^0.5.1"
     class-validator: "npm:^0.14.2"
+    dotenv: "npm:16.4.7"
     eslint: "npm:^9.30.1"
     eslint-config-prettier: "npm:^10.1.5"
     eslint-plugin-prettier: "npm:^5.5.1"

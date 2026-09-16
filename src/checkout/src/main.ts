@@ -1,57 +1,21 @@
-/**
- * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: MIT-0
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy of this
- * software and associated documentation files (the "Software"), to deal in the Software
- * without restriction, including without limitation the rights to use, copy, modify,
- * merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
- * permit persons to whom the Software is furnished to do so.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
- * INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
- * PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
- * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
- * OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
- * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- */
-import WhatapAgent from 'whatap';
-if (process.env.WHATAP_LICENSE && process.env.WHATAP_SERVER_HOST) {
-  WhatapAgent.NodeAgent;
-}
-import { ValidationPipe } from '@nestjs/common';
-import { NestFactory } from '@nestjs/core';
-import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
-import { AppModule } from './app.module';
-import { CheckoutModule } from './checkout/checkout.module';
+import { initializeTelemetry } from './telemetry';
 
-async function bootstrap() {
-  // Start SDK before nestjs factory create
-  if (process.env.OTEL_ENABLED !== 'false') {
-  const { default: otelSDK } = await import('./tracing');
-  await otelSDK.start();
+async function main() {
+  // APM을 먼저 준비합니다.
+  await initializeTelemetry();
+
+  // 앞에서 작성한 bootstrap.ts를 불러옵니다.
+  const { bootstrap } = await import('./bootstrap');
+
+  // bootstrap.ts에 있는 앱 시작 함수를 실행합니다.
+  await bootstrap();
 }
 
-  const app = await NestFactory.create(AppModule);
-  app.useGlobalPipes(new ValidationPipe());
+main().catch((error: Error) => {
+  console.error(
+    '[startup] Checkout failed to start:',
+    error.message,
+  );
 
-  const config = new DocumentBuilder()
-    .setTitle('Checkout service')
-    .setDescription('The checkout API')
-    .setVersion('1.0')
-    .addTag('checkout')
-    .addServer('http://localhost:8000')
-    .build();
-  const document = SwaggerModule.createDocument(app, config, {
-    include: [CheckoutModule],
-  });
-  SwaggerModule.setup('api', app, document);
-
-  // Starts listening for shutdown hooks
-  app.enableShutdownHooks();
-
-  const port = process.env.PORT || 8080;
-
-  await app.listen(port);
-}
-bootstrap();
+  process.exit(1);
+});
