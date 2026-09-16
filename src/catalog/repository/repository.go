@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"time"
+	"os"
 
 	"github.com/aws-containers/retail-store-sample-app/catalog/config"
 	"github.com/aws-containers/retail-store-sample-app/catalog/model"
@@ -58,9 +59,13 @@ func NewRepository(config config.DatabaseConfiguration) (CatalogRepository, erro
 		return nil, fmt.Errorf("failed to connect database: %w", err)
 	}
 
-	if err := db.Use(tracing.NewPlugin(tracing.WithoutMetrics())); err != nil {
-		panic(err)
+	// OTel을 명시적으로 끈 환경에서는 DB 추적 플러그인도 등록하지 않습니다.
+	if os.Getenv("OTEL_ENABLED") != "false" {
+		if err := db.Use(tracing.NewPlugin(tracing.WithoutMetrics())); err != nil {
+			panic(err)
+		}
 	}
+
 
 	fmt.Println("Running database migration...")
 
